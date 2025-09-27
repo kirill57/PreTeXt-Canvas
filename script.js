@@ -6,12 +6,28 @@ class PreTeXtCanvas {
         this.currentDocument = null;
         this.selectedElement = null;
         this.isDocumentModified = false;
+        this.mathJaxReady = false;
+        this.mathJaxRenderQueue = Promise.resolve();
+        this.pendingMathRender = false;
+        this.mathRenderHandle = null;
+        this.mathJaxReadyPromise = null;
+        this.sidebarMinWidth = 180;
+        this.sidebarMaxWidth = 520;
+        this.sidebarDefaults = { left: 280, right: 280 };
+        this.sidebarState = {
+            left: { width: this.sidebarDefaults.left, collapsed: false },
+            right: { width: this.sidebarDefaults.right, collapsed: false }
+        };
+        this.activeResizer = null;
+        this.layoutControlsInitialized = false;
         
         this.init();
+        this.waitForMathJax();
     }
 
     init() {
         this.setupEventListeners();
+        this.setupLayoutControls();
         this.setupDragAndDrop();
         this.generateOutline();
         this.updateStatus('Ready');
@@ -75,6 +91,181 @@ class PreTeXtCanvas {
         });
     }
 
+
+    setupLayoutControls() {
+        if (this.layoutControlsInitialized) {
+            this.applySidebarWidth('left');
+            this.applySidebarWidth('right');
+            return;
+        }
+
+        this.layoutControlsInitialized = true;
+
+        const root = document.documentElement;
+        const leftSidebar = document.getElementById('left-sidebar');
+        const rightSidebar = document.getElementById('right-sidebar');
+        const leftToggle = document.getElementById('toggle-left-sidebar');
+        const rightToggle = document.getElementById('toggle-right-sidebar');
+        const computedStyles = getComputedStyle(root);
+        const minFromCss = parseInt(computedStyles.getPropertyValue('--sidebar-min-width'), 10);
+        const maxFromCss = parseInt(computedStyles.getPropertyValue('--sidebar-max-width'), 10);
+
+        if (!Number.isNaN(minFromCss)) {
+            this.sidebarMinWidth = minFromCss;
+        }
+
+        if (!Number.isNaN(maxFromCss)) {
+            this.sidebarMaxWidth = maxFromCss;
+        }
+
+
+        const initialLeft = parseInt(computedStyles.getPropertyValue('--left-sidebar-width'), 10) || (leftSidebar ? leftSidebar.offsetWidth : this.sidebarDefaults.left);
+        const initialRight = parseInt(computedStyles.getPropertyValue('--right-sidebar-width'), 10) || (rightSidebar ? rightSidebar.offsetWidth : this.sidebarDefaults.right);
+
+        this.sidebarDefaults.left = initialLeft || this.sidebarDefaults.left;
+        this.sidebarDefaults.right = initialRight || this.sidebarDefaults.right;
+
+        this.sidebarState.left.width = this.sidebarDefaults.left;
+        this.sidebarState.right.width = this.sidebarDefaults.right;
+
+        this.applySidebarWidth('left');
+        this.applySidebarWidth('right');
+
+        if (leftToggle) {
+            leftToggle.addEventListener('click', () => this.toggleSidebar('left'));
+        }
+        if (rightToggle) {
+            rightToggle.addEventListener('click', () => this.toggleSidebar('right'));
+        }
+
+        document.querySelectorAll('.sidebar-resizer').forEach((resizer) => {
+            const side = resizer.dataset.side;
+            if (!side) {
+                return;
+            }
+
+            resizer.addEventListener('mousedown', (event) => this.onResizerMouseDown(event, side));
+            resizer.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                this.resetSidebarWidth(side);
+            });
+        });
+
+        document.addEventListener('mousemove', (event) => this.onResizerMouseMove(event));
+        document.addEventListener('mouseup', () => this.onResizerMouseUp());
+    }
+
+    applySidebarWidth(side) {
+        const state = this.sidebarState[side];
+        if (!state) {
+            return;
+        }
+
+        const variableName = side === 'left' ? '--left-sidebar-width' : '--right-sidebar-width';
+        const targetSidebar = side === 'left' ? document.getElementById('left-sidebar') : document.getElementById('right-sidebar');
+        const toggle = side === 'left' ? document.getElementById('toggle-left-sidebar') : document.getElementById('toggle-right-sidebar');
+        const width = state.collapsed ? 0 : state.width;
+
+        document.documentElement.style.setProperty(variableName, `${Math.max(width, 0)}px`);
+
+        if (targetSidebar) {
+            targetSidebar.classList.toggle('collapsed', state.collapsed);
+        }
+
+        if (toggle) {
+            const collapsed = state.collapsed;
+            toggle.setAttribute('aria-expanded', (!collapsed).toString());
+            toggle.textContent = collapsed ? (side === 'left' ? 'Show Left' : 'Show Right') : (side === 'left' ? 'Hide Left' : 'Hide Right');
+        }
+    }
+
+    toggleSidebar(side) {
+        const state = this.sidebarState[side];
+        if (!state) {
+            return;
+        }
+
+        state.collapsed = !state.collapsed;
+
+        if (!state.collapsed && state.width < this.sidebarMinWidth) {
+            state.width = this.sidebarDefaults[side] || this.sidebarMinWidth;
+        }
+
+        this.applySidebarWidth(side);
+    }
+
+    resetSidebarWidth(side) {
+        const state = this.sidebarState[side];
+        if (!state) {
+            return;
+        }
+
+        state.collapsed = false;
+        state.width = this.sidebarDefaults[side] || this.sidebarMinWidth;
+
+        this.applySidebarWidth(side);
+    }
+
+    setSidebarWidth(side, width) {
+        const state = this.sidebarState[side];
+        if (!state) {
+            return;
+        }
+
+        const clampedWidth = Math.min(Math.max(width, this.sidebarMinWidth), this.sidebarMaxWidth);
+
+        state.width = clampedWidth;
+        state.collapsed = false;
+
+        this.applySidebarWidth(side);
+    }
+
+    onResizerMouseDown(event, side) {
+        event.preventDefault();
+
+        const state = this.sidebarState[side];
+        if (!state) {
+            return;
+        }
+
+        if (state.collapsed) {
+            state.collapsed = false;
+            this.applySidebarWidth(side);
+        }
+
+        const startWidth = state.width || this.sidebarDefaults[side] || this.sidebarMinWidth;
+
+        this.activeResizer = {
+            side,
+            startX: event.clientX,
+            startWidth
+        };
+
+        document.body.classList.add('resizing-sidebar');
+    }
+
+    onResizerMouseMove(event) {
+        if (!this.activeResizer) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const { side, startX, startWidth } = this.activeResizer;
+        const delta = event.clientX - startX;
+        const newWidth = side === 'left' ? startWidth + delta : startWidth - delta;
+
+        this.setSidebarWidth(side, newWidth);
+    }
+
+    onResizerMouseUp() {
+        if (!this.activeResizer) {
+            return;
+        }
+
+        this.activeResizer = null;
+        document.body.classList.remove('resizing-sidebar');
+    }
     switchView(view) {
         this.currentView = view;
         
@@ -413,15 +604,15 @@ class PreTeXtCanvas {
 
     getOutlineIcon(type) {
         const icons = {
-            'book': '📚',
-            'article': '📄',
-            'chapter': '📂',
-            'section': '📑',
-            'subsection': '📋',
-            'subsubsection': '📝',
-            'error': '⚠️'
+            'book': 'ðŸ“š',
+            'article': 'ðŸ“„',
+            'chapter': 'ðŸ“‚',
+            'section': 'ðŸ“‘',
+            'subsection': 'ðŸ“‹',
+            'subsubsection': 'ðŸ“',
+            'error': 'âš ï¸'
         };
-        return icons[type] || '•';
+        return icons[type] || 'â€¢';
     }
 
     navigateToElement(elementId) {
@@ -482,12 +673,77 @@ class PreTeXtCanvas {
         }
     }
 
-    renderMath() {
-        if (window.MathJax && window.MathJax.typesetPromise) {
-            window.MathJax.typesetPromise().catch((err) => {
-                console.warn('MathJax rendering error:', err);
-            });
+    waitForMathJax(retryCount = 0) {
+        if (this.mathJaxReady) {
+            return;
         }
+
+        if (window.MathJax && window.MathJax.typesetPromise) {
+            if (window.MathJax.startup && window.MathJax.startup.promise) {
+                if (!this.mathJaxReadyPromise) {
+                    this.mathJaxReadyPromise = window.MathJax.startup.promise
+                        .then(() => {
+                            this.mathJaxReady = true;
+                            this.renderMath();
+                        })
+                        .catch((err) => {
+                            console.warn('MathJax startup error:', err);
+                        });
+                }
+            } else {
+                this.mathJaxReady = true;
+                this.renderMath();
+            }
+            return;
+        }
+
+        if (retryCount < 60) {
+            setTimeout(() => this.waitForMathJax(retryCount + 1), 100);
+        } else {
+            console.warn('MathJax did not become available in time.');
+        }
+    }
+
+    renderMath() {
+        const visualContent = document.getElementById('visual-content');
+        if (!visualContent) {
+            return;
+        }
+
+        if (!window.MathJax || !window.MathJax.typesetPromise) {
+            this.pendingMathRender = true;
+            return;
+        }
+
+        if (!this.mathJaxReady) {
+            this.pendingMathRender = true;
+            return;
+        }
+
+        this.pendingMathRender = false;
+
+        if (this.mathRenderHandle) {
+            clearTimeout(this.mathRenderHandle);
+        }
+
+        this.mathRenderHandle = setTimeout(() => {
+            this.mathRenderHandle = null;
+            const container = document.getElementById('visual-content');
+            if (!container) {
+                return;
+            }
+
+            this.mathJaxRenderQueue = this.mathJaxRenderQueue
+                .then(() => {
+                    if (window.MathJax.texReset) {
+                        window.MathJax.texReset();
+                    }
+                    return window.MathJax.typesetPromise([container]);
+                })
+                .catch((err) => {
+                    console.warn('MathJax rendering error:', err);
+                });
+        }, 120);
     }
 
     newDocument() {

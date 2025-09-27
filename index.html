@@ -27,13 +27,17 @@
                     <button id="source-view" class="btn btn-view">Source</button>
                     <button id="split-view" class="btn btn-view">Split</button>
                 </div>
+                <div class="layout-controls">
+                    <button id="toggle-left-sidebar" class="btn btn-secondary" aria-expanded="true">Hide Left</button>
+                    <button id="toggle-right-sidebar" class="btn btn-secondary" aria-expanded="true">Hide Right</button>
+                </div>
             </div>
         </header>
 
         <!-- Main content area -->
         <main class="main-content">
             <!-- Left sidebar - Element palette and outline -->
-            <aside class="left-sidebar">
+            <aside class="left-sidebar" id="left-sidebar">
                 <div class="panel-tabs">
                     <button class="tab-btn active" data-panel="palette">Elements</button>
                     <button class="tab-btn" data-panel="outline">Outline</button>
@@ -91,6 +95,8 @@
                 </div>
             </aside>
 
+            <div class="sidebar-resizer left-resizer" data-side="left" title="Drag to resize"></div>
+
             <!-- Editor area -->
             <div class="editor-container">
                 <!-- Visual Editor -->
@@ -133,8 +139,10 @@
                 </div>
             </div>
 
+            <div class="sidebar-resizer right-resizer" data-side="right" title="Drag to resize"></div>
+
             <!-- Right sidebar - Properties panel -->
-            <aside class="right-sidebar">
+            <aside class="right-sidebar" id="right-sidebar">
                 <div class="panel">
                     <h3>Properties</h3>
                     <div id="properties-content" class="properties-content">
