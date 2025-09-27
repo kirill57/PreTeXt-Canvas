@@ -105,6 +105,15 @@ class PreTeXtCanvas {
                 break;
         }
 
+        if (view === 'visual') {
+            this.syncToVisual();
+        } else if (view === 'source') {
+            this.syncToSource();
+        } else if (view === 'split') {
+            this.syncToSource();
+            this.syncToVisual();
+        }
+
         this.updateStatus(`${view.charAt(0).toUpperCase() + view.slice(1)} view active`);
     }
 
@@ -220,30 +229,34 @@ class PreTeXtCanvas {
     }
 
     syncToSource() {
-        if (this.currentView === 'split') {
-            const visualContent = document.getElementById('visual-content');
-            const sourceContent = document.getElementById('source-content');
-            
-            // Convert HTML back to XML (simplified)
-            let xml = visualContent.innerHTML;
-            xml = this.htmlToXml(xml);
-            sourceContent.value = xml;
+        const visualContent = document.getElementById('visual-content');
+        const sourceContent = document.getElementById('source-content');
+
+        if (!visualContent || !sourceContent) {
+            return;
         }
+
+        // Convert HTML back to XML (simplified)
+        let xml = visualContent.innerHTML;
+        xml = this.htmlToXml(xml);
+        sourceContent.value = xml;
     }
 
     syncToVisual() {
-        if (this.currentView === 'split') {
-            const sourceContent = document.getElementById('source-content');
-            const visualContent = document.getElementById('visual-content');
-            
-            try {
-                const xml = sourceContent.value;
-                const html = this.xmlToHtml(xml);
-                visualContent.innerHTML = html;
-                this.renderMath();
-            } catch (e) {
-                console.warn('Could not sync to visual editor:', e);
-            }
+        const sourceContent = document.getElementById('source-content');
+        const visualContent = document.getElementById('visual-content');
+
+        if (!sourceContent || !visualContent) {
+            return;
+        }
+
+        try {
+            const xml = sourceContent.value;
+            const html = this.xmlToHtml(xml);
+            visualContent.innerHTML = html;
+            this.renderMath();
+        } catch (e) {
+            console.warn('Could not sync to visual editor:', e);
         }
     }
 
