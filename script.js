@@ -504,9 +504,23 @@ class PreTeXtCanvas {
         // Replace math containers with <me>/<md> elements
         container.querySelectorAll('.math-expression, .math-display').forEach((mathEl) => {
             const isDisplay = mathEl.classList.contains('math-display');
-            const pretext = mathEl.dataset.pretext || stripDelimiters(mathEl.textContent || '', isDisplay ? 'display' : 'inline');
+            const storedPretext = mathEl.dataset.pretext;
             const replacement = document.createElement(isDisplay ? 'md' : 'me');
-            replacement.textContent = pretext;
+
+            if (storedPretext && storedPretext.trim()) {
+                const temp = document.createElement('div');
+                temp.innerHTML = storedPretext;
+                while (temp.firstChild) {
+                    replacement.appendChild(temp.firstChild);
+                }
+            } else {
+                const fallbackText = stripDelimiters(
+                    mathEl.textContent || '',
+                    isDisplay ? 'display' : 'inline'
+                );
+                replacement.textContent = fallbackText;
+            }
+
             mathEl.replaceWith(replacement);
         });
 
