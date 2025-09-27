@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude" xml:lang="en-US">
+    <docinfo>
+        <macros>
+        \newcommand{\R}{\mathbb R}
+        \newcommand{\N}{\mathbb N}
+        \newcommand{\Z}{\mathbb Z}
+        \newcommand{\Q}{\mathbb Q}
+        </macros>
+    </docinfo>
+    
+    <book xml:id="sample-textbook">
+        <title>Sample PreTeXt Textbook</title>
+        
+        <frontmatter>
+            <titlepage>
+                <author>
+                    <personname>PreTeXt Canvas</personname>
+                    <department>Mathematics Department</department>
+                    <institution>Sample University</institution>
+                </author>
+                <date><today/></date>
+            </titlepage>
+        </frontmatter>
+        
+        <chapter xml:id="ch-introduction">
+            <title>Introduction</title>
+            
+            <p>
+                Welcome to this sample PreTeXt textbook created with PreTeXt Canvas. 
+                This document demonstrates various PreTeXt elements and their usage.
+            </p>
+            
+            <section xml:id="sec-basics">
+                <title>Basic Elements</title>
+                
+                <p>
+                    PreTeXt supports various types of content including paragraphs, 
+                    lists, mathematical expressions, and structured elements like 
+                    theorems and definitions.
+                </p>
+                
+                <subsection xml:id="subsec-lists">
+                    <title>Lists and Formatting</title>
+                    
+                    <p>Here are some examples of different list types:</p>
+                    
+                    <ul>
+                        <li><p>Unordered list item one</p></li>
+                        <li><p>Unordered list item two</p></li>
+                        <li><p>Unordered list item three</p></li>
+                    </ul>
+                    
+                    <ol>
+                        <li><p>Ordered list item one</p></li>
+                        <li><p>Ordered list item two</p></li>
+                        <li><p>Ordered list item three</p></li>
+                    </ol>
+                    
+                    <dl>
+                        <li>
+                            <title>Definition List</title>
+                            <p>A list where each item has a term and its definition.</p>
+                        </li>
+                        <li>
+                            <title>PreTeXt</title>
+                            <p>An authoring and publishing system for scholarly documents.</p>
+                        </li>
+                    </dl>
+                </subsection>
+            </section>
+            
+            <section xml:id="sec-mathematics">
+                <title>Mathematical Content</title>
+                
+                <p>
+                    PreTeXt has excellent support for mathematical notation using LaTeX syntax. 
+                    Here are some examples:
+                </p>
+                
+                <p>
+                    Inline mathematics: <m>x^2 + y^2 = z^2</m> and <m>\int_0^1 f(x) \, dx</m>.
+                </p>
+                
+                <p>Display mathematics:</p>
+                
+                <me>
+                    \lim_{n \to \infty} \sum_{k=1}^n \frac{1}{k^2} = \frac{\pi^2}{6}
+                </me>
+                
+                <p>Multi-line display mathematics:</p>
+                
+                <md>
+                    <mrow>f(x) &amp;= x^3 - 3x^2 + 2x - 1</mrow>
+                    <mrow>f'(x) &amp;= 3x^2 - 6x + 2</mrow>
+                    <mrow>f''(x) &amp;= 6x - 6</mrow>
+                </md>
+                
+                <definition xml:id="def-continuous">
+                    <title>Continuous Function</title>
+                    <statement>
+                        <p>
+                            A function <m>f: \R \to \R</m> is <term>continuous</term> at a point 
+                            <m>a \in \R</m> if for every <m>\epsilon > 0</m>, there exists 
+                            <m>\delta > 0</m> such that for all <m>x \in \R</m> with 
+                            <m>|x - a| &lt; \delta</m>, we have <m>|f(x) - f(a)| &lt; \epsilon</m>.
+                        </p>
+                    </statement>
+                </definition>
+                
+                <theorem xml:id="thm-intermediate-value">
+                    <title>Intermediate Value Theorem</title>
+                    <statement>
+                        <p>
+                            Let <m>f: [a,b] \to \R</m> be a continuous function. If <m>y</m> 
+                            is any value between <m>f(a)</m> and <m>f(b)</m>, then there exists 
+                            <m>c \in [a,b]</m> such that <m>f(c) = y</m>.
+                        </p>
+                    </statement>
+                    <proof>
+                        <p>
+                            This follows from the completeness of the real numbers and the 
+                            definition of continuity. The detailed proof is left as an exercise.
+                        </p>
+                    </proof>
+                </theorem>
+            </section>
+        </chapter>
+        
+        <chapter xml:id="ch-advanced">
+            <title>Advanced Features</title>
+            
+            <section xml:id="sec-figures">
+                <title>Figures and Media</title>
+                
+                <p>PreTeXt supports various types of media content:</p>
+                
+                <figure xml:id="fig-sample">
+                    <caption>A sample figure caption</caption>
+                    <image source="images/sample.png" width="60%">
+                        <description>Description of the image for accessibility</description>
+                    </image>
+                </figure>
+                
+                <p>
+                    Videos can also be embedded using YouTube or other sources:
+                </p>
+                
+                <!-- <video xml:id="vid-intro" youtube="dQw4w9WgXcQ" width="80%"/> -->
+            </section>
+            
+            <section xml:id="sec-exercises">
+                <title>Exercises</title>
+                
+                <p>
+                    PreTeXt provides excellent support for exercises and problems:
+                </p>
+                
+                <exercise xml:id="ex-basic-calc">
+                    <statement>
+                        <p>
+                            Find the derivative of <m>f(x) = x^3 - 2x^2 + x - 1</m>.
+                        </p>
+                    </statement>
+                    <solution>
+                        <p>
+                            Using the power rule:
+                            <me>f'(x) = 3x^2 - 4x + 1</me>
+                        </p>
+                    </solution>
+                </exercise>
+                
+                <exercise xml:id="ex-integration">
+                    <statement>
+                        <p>
+                            Evaluate the integral <m>\int_0^2 (x^2 + 1) \, dx</m>.
+                        </p>
+                    </statement>
+                    <hint>
+                        <p>Use the power rule for integration.</p>
+                    </hint>
+                    <solution>
+                        <p>
+                            <md>
+                                <mrow>\int_0^2 (x^2 + 1) \, dx &amp;= \left[\frac{x^3}{3} + x\right]_0^2</mrow>
+                                <mrow>&amp;= \left(\frac{8}{3} + 2\right) - (0)</mrow>
+                                <mrow>&amp;= \frac{8}{3} + 2 = \frac{14}{3}</mrow>
+                            </md>
+                        </p>
+                    </solution>
+                </exercise>
+            </section>
+        </chapter>
+        
+        <backmatter>
+            <appendix xml:id="app-reference">
+                <title>Quick Reference</title>
+                
+                <p>
+                    This appendix provides a quick reference for common PreTeXt elements 
+                    and their usage.
+                </p>
+                
+                <table xml:id="table-elements">
+                    <title>Common PreTeXt Elements</title>
+                    <tabular>
+                        <row header="yes">
+                            <cell>Element</cell>
+                            <cell>Purpose</cell>
+                            <cell>Example</cell>
+                        </row>
+                        <row>
+                            <cell><c>&lt;p&gt;</c></cell>
+                            <cell>Paragraph</cell>
+                            <cell><c>&lt;p&gt;Text content&lt;/p&gt;</c></cell>
+                        </row>
+                        <row>
+                            <cell><c>&lt;m&gt;</c></cell>
+                            <cell>Inline math</cell>
+                            <cell><c>&lt;m&gt;x^2 + 1&lt;/m&gt;</c></cell>
+                        </row>
+                        <row>
+                            <cell><c>&lt;me&gt;</c></cell>
+                            <cell>Display math</cell>
+                            <cell><c>&lt;me&gt;\int f(x) dx&lt;/me&gt;</c></cell>
+                        </row>
+                    </tabular>
+                </table>
+            </appendix>
+        </backmatter>
+    </book>
+</pretext>
