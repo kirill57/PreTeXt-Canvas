@@ -211,10 +211,13 @@ body.resizing-sidebar * {
 /* Panels */
 .panel {
     padding: 16px;
+}
+
+.left-sidebar .panel {
     display: none;
 }
 
-.panel.active {
+.left-sidebar .panel.active {
     display: block;
 }
 
