@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PreTeXt Canvas - WYSIWYG Editor</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header with toolbar -->
+        <header class="header">
+            <div class="toolbar">
+                <div class="logo">
+                    <h1>PreTeXt Canvas</h1>
+                </div>
+                <div class="file-controls">
+                    <button id="new-doc" class="btn btn-primary">New</button>
+                    <button id="open-file" class="btn btn-secondary">Open</button>
+                    <button id="save-file" class="btn btn-secondary">Save</button>
+                    <input type="file" id="file-input" accept=".ptx,.xml" style="display: none;">
+                </div>
+                <div class="view-controls">
+                    <button id="visual-view" class="btn btn-view active">Visual</button>
+                    <button id="source-view" class="btn btn-view">Source</button>
+                    <button id="split-view" class="btn btn-view">Split</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main content area -->
+        <main class="main-content">
+            <!-- Left sidebar - Element palette and outline -->
+            <aside class="left-sidebar">
+                <div class="panel-tabs">
+                    <button class="tab-btn active" data-panel="palette">Elements</button>
+                    <button class="tab-btn" data-panel="outline">Outline</button>
+                </div>
+                
+                <!-- Element Palette -->
+                <div id="palette-panel" class="panel active">
+                    <h3>PreTeXt Elements</h3>
+                    <div class="element-groups">
+                        <div class="element-group">
+                            <h4>Structure</h4>
+                            <div class="elements">
+                                <button class="element-btn" data-element="book" title="Book">📚 Book</button>
+                                <button class="element-btn" data-element="article" title="Article">📄 Article</button>
+                                <button class="element-btn" data-element="chapter" title="Chapter">📂 Chapter</button>
+                                <button class="element-btn" data-element="section" title="Section">📑 Section</button>
+                                <button class="element-btn" data-element="subsection" title="Subsection">📋 Subsection</button>
+                            </div>
+                        </div>
+                        <div class="element-group">
+                            <h4>Content</h4>
+                            <div class="elements">
+                                <button class="element-btn" data-element="p" title="Paragraph">¶ Paragraph</button>
+                                <button class="element-btn" data-element="ol" title="Ordered List">🔢 Ordered List</button>
+                                <button class="element-btn" data-element="ul" title="Unordered List">• Unordered List</button>
+                                <button class="element-btn" data-element="dl" title="Definition List">📝 Definition List</button>
+                            </div>
+                        </div>
+                        <div class="element-group">
+                            <h4>Math & Science</h4>
+                            <div class="elements">
+                                <button class="element-btn" data-element="me" title="Math Expression">∑ Math Expression</button>
+                                <button class="element-btn" data-element="md" title="Math Display">∫ Math Display</button>
+                                <button class="element-btn" data-element="theorem" title="Theorem">📐 Theorem</button>
+                                <button class="element-btn" data-element="definition" title="Definition">📖 Definition</button>
+                            </div>
+                        </div>
+                        <div class="element-group">
+                            <h4>Media</h4>
+                            <div class="elements">
+                                <button class="element-btn" data-element="figure" title="Figure">🖼️ Figure</button>
+                                <button class="element-btn" data-element="image" title="Image">📷 Image</button>
+                                <button class="element-btn" data-element="video" title="Video">🎥 Video</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Outline -->
+                <div id="outline-panel" class="panel">
+                    <h3>Document Outline</h3>
+                    <div id="outline-tree" class="outline-tree">
+                        <!-- Dynamic outline will be generated here -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Editor area -->
+            <div class="editor-container">
+                <!-- Visual Editor -->
+                <div id="visual-editor" class="editor-pane active">
+                    <div id="visual-content" class="visual-content" contenteditable="true">
+                        <div class="pretext-document">
+                            <h1>Welcome to PreTeXt Canvas</h1>
+                            <p>Start creating your PreTeXt document here. Use the element palette on the left to add new elements, or type directly in this visual editor.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Source Editor -->
+                <div id="source-editor" class="editor-pane">
+                    <textarea id="source-content" class="source-content" spellcheck="false"><?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude" xml:lang="en-US">
+    <docinfo>
+        <macros>
+        \newcommand{\R}{\mathbb R}
+        </macros>
+    </docinfo>
+    
+    <book xml:id="sample-book">
+        <title>Welcome to PreTeXt Canvas</title>
+        
+        <chapter xml:id="ch-introduction">
+            <title>Introduction</title>
+            
+            <section xml:id="sec-getting-started">
+                <title>Getting Started</title>
+                
+                <p>
+                    Start creating your PreTeXt document here. Use the element palette on the left to add new elements, or edit the XML source directly.
+                </p>
+                
+            </section>
+        </chapter>
+    </book>
+</pretext></textarea>
+                </div>
+            </div>
+
+            <!-- Right sidebar - Properties panel -->
+            <aside class="right-sidebar">
+                <div class="panel">
+                    <h3>Properties</h3>
+                    <div id="properties-content" class="properties-content">
+                        <p class="no-selection">Select an element to view its properties</p>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h3>Validation</h3>
+                    <div id="validation-content" class="validation-content">
+                        <div class="validation-status valid">
+                            <span class="status-icon">✓</span>
+                            <span>Document is valid</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Status bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="document-status">Ready</span>
+            </div>
+            <div class="status-right">
+                <span id="cursor-position">Line 1, Column 1</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- MathJax Configuration -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                tags: 'ams'
+            },
+            chtml: {
+                scale: 1.0,
+                minScale: .5,
+                matchFontHeight: false
+            }
+        };
+    </script>
+
+    <script src="script.js"></script>
+</body>
+</html>
