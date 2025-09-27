@@ -6,11 +6,6 @@ class PreTeXtCanvas {
         this.currentDocument = null;
         this.selectedElement = null;
         this.isDocumentModified = false;
-        this.mathJaxReady = false;
-        this.mathJaxRenderQueue = Promise.resolve();
-        this.pendingMathRender = false;
-        this.mathRenderHandle = null;
-        this.mathJaxReadyPromise = null;
         this.sidebarMinWidth = 180;
         this.sidebarMaxWidth = 520;
         this.sidebarDefaults = { left: 280, right: 280 };
@@ -22,7 +17,6 @@ class PreTeXtCanvas {
         this.layoutControlsInitialized = false;
         
         this.init();
-        this.waitForMathJax();
     }
 
     init() {
@@ -673,77 +667,13 @@ class PreTeXtCanvas {
         }
     }
 
-    waitForMathJax(retryCount = 0) {
-        if (this.mathJaxReady) {
-            return;
-        }
-
-        if (window.MathJax && window.MathJax.typesetPromise) {
-            if (window.MathJax.startup && window.MathJax.startup.promise) {
-                if (!this.mathJaxReadyPromise) {
-                    this.mathJaxReadyPromise = window.MathJax.startup.promise
-                        .then(() => {
-                            this.mathJaxReady = true;
-                            this.renderMath();
-                        })
-                        .catch((err) => {
-                            console.warn('MathJax startup error:', err);
-                        });
-                }
-            } else {
-                this.mathJaxReady = true;
-                this.renderMath();
-            }
-            return;
-        }
-
-        if (retryCount < 60) {
-            setTimeout(() => this.waitForMathJax(retryCount + 1), 100);
-        } else {
-            console.warn('MathJax did not become available in time.');
-        }
-    }
 
     renderMath() {
-        const visualContent = document.getElementById('visual-content');
-        if (!visualContent) {
-            return;
+        if (window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise().catch((err) => {
+                console.warn('MathJax rendering error:', err);
+            });
         }
-
-        if (!window.MathJax || !window.MathJax.typesetPromise) {
-            this.pendingMathRender = true;
-            return;
-        }
-
-        if (!this.mathJaxReady) {
-            this.pendingMathRender = true;
-            return;
-        }
-
-        this.pendingMathRender = false;
-
-        if (this.mathRenderHandle) {
-            clearTimeout(this.mathRenderHandle);
-        }
-
-        this.mathRenderHandle = setTimeout(() => {
-            this.mathRenderHandle = null;
-            const container = document.getElementById('visual-content');
-            if (!container) {
-                return;
-            }
-
-            this.mathJaxRenderQueue = this.mathJaxRenderQueue
-                .then(() => {
-                    if (window.MathJax.texReset) {
-                        window.MathJax.texReset();
-                    }
-                    return window.MathJax.typesetPromise([container]);
-                })
-                .catch((err) => {
-                    console.warn('MathJax rendering error:', err);
-                });
-        }, 120);
     }
 
     newDocument() {
