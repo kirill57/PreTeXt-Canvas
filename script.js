@@ -379,23 +379,54 @@ class PreTeXtCanvas {
     }
 
     xmlToHtml(xml) {
-        // Basic XML to HTML conversion for visual display
-        let html = xml;
-        
-        // Convert basic structure elements
-        html = html.replace(/<title>(.*?)<\/title>/g, '<h2>$1</h2>');
-        html = html.replace(/<p>(.*?)<\/p>/g, '<p>$1</p>');
-        html = html.replace(/<me>(.*?)<\/me>/g, '<div class="math-expression">\\($1\\)</div>');
-        html = html.replace(/<md>(.*?)<\/md>/gs, '<div class="math-display">\\[$1\\]</div>');
-        
-        // Convert lists
-        html = html.replace(/<ol>/g, '<ol>');
-        html = html.replace(/<\/ol>/g, '</ol>');
-        html = html.replace(/<ul>/g, '<ul>');
-        html = html.replace(/<\/ul>/g, '</ul>');
-        html = html.replace(/<li><p>(.*?)<\/p><\/li>/g, '<li>$1</li>');
-        
-        return html;
+        // Convert XML-ish markup to HTML for the visual editor using DOM operations
+        const container = document.createElement('div');
+        container.innerHTML = xml;
+
+        // Convert titles to headings
+        container.querySelectorAll('title').forEach((titleEl) => {
+            const heading = document.createElement('h2');
+            heading.innerHTML = titleEl.innerHTML;
+            titleEl.replaceWith(heading);
+        });
+
+        // Normalize list items that wrap <p> tags (keep simple for now)
+        container.querySelectorAll('li > p').forEach((pEl) => {
+            if (pEl.parentElement && pEl.parentElement.tagName.toLowerCase() === 'li') {
+                const li = pEl.parentElement;
+                // Replace the <p> with its children to avoid nested paragraphs
+                while (pEl.firstChild) {
+                    li.insertBefore(pEl.firstChild, pEl);
+                }
+                li.removeChild(pEl);
+            }
+        });
+
+        // Convert inline math (<me>) to visual containers
+        container.querySelectorAll('me').forEach((meEl) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'math-expression';
+            const originalContent = meEl.innerHTML;
+            wrapper.dataset.pretext = originalContent;
+            wrapper.append(document.createTextNode('\\('));
+            wrapper.append(document.createTextNode(meEl.textContent || ''));
+            wrapper.append(document.createTextNode('\\)'));
+            meEl.replaceWith(wrapper);
+        });
+
+        // Convert display math (<md>) to visual containers
+        container.querySelectorAll('md').forEach((mdEl) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'math-display';
+            const originalContent = mdEl.innerHTML;
+            wrapper.dataset.pretext = originalContent;
+            wrapper.append(document.createTextNode('\\['));
+            wrapper.append(document.createTextNode(mdEl.textContent || ''));
+            wrapper.append(document.createTextNode('\\]'));
+            mdEl.replaceWith(wrapper);
+        });
+
+        return container.innerHTML;
     }
 
     onVisualEdit() {
@@ -446,15 +477,40 @@ class PreTeXtCanvas {
     }
 
     htmlToXml(html) {
-        // Basic HTML to XML conversion
-        let xml = html;
-        
-        // Convert basic structure
-        xml = xml.replace(/<h2>(.*?)<\/h2>/g, '<title>$1</title>');
-        xml = xml.replace(/<div class="math-expression">\\(\\((.*?)\\)\\)<\/div>/g, '<me>$1</me>');
-        xml = xml.replace(/<div class="math-display">\\(\\[(.*?)\\]\\)<\/div>/gs, '<md>$1</md>');
-        
-        return xml;
+        // Convert visual HTML back to PreTeXt XML using DOM operations
+        const container = document.createElement('div');
+        container.innerHTML = html;
+
+        // Convert headings back to titles
+        container.querySelectorAll('h2').forEach((heading) => {
+            const titleEl = document.createElement('title');
+            titleEl.innerHTML = heading.innerHTML;
+            heading.replaceWith(titleEl);
+        });
+
+        const stripDelimiters = (value, type) => {
+            if (!value) {
+                return '';
+            }
+
+            const trimmed = value.trim();
+            if (type === 'inline') {
+                return trimmed.replace(/^\\\(/, '').replace(/\\\)$/, '');
+            }
+
+            return trimmed.replace(/^\\\[/, '').replace(/\\\]$/, '');
+        };
+
+        // Replace math containers with <me>/<md> elements
+        container.querySelectorAll('.math-expression, .math-display').forEach((mathEl) => {
+            const isDisplay = mathEl.classList.contains('math-display');
+            const pretext = mathEl.dataset.pretext || stripDelimiters(mathEl.textContent || '', isDisplay ? 'display' : 'inline');
+            const replacement = document.createElement(isDisplay ? 'md' : 'me');
+            replacement.textContent = pretext;
+            mathEl.replaceWith(replacement);
+        });
+
+        return container.innerHTML;
     }
 
     selectElement(element) {
