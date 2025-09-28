@@ -992,6 +992,9 @@ class PreTeXtCanvas {
         container.querySelectorAll('h2').forEach((heading) => {
             const titleEl = document.createElement('title');
             titleEl.innerHTML = heading.innerHTML;
+            if (heading.dataset && heading.dataset.ptxXmlId) {
+                titleEl.setAttribute('xml:id', heading.dataset.ptxXmlId);
+            }
             heading.replaceWith(titleEl);
         });
 
@@ -1013,6 +1016,10 @@ class PreTeXtCanvas {
             const isDisplay = mathEl.classList.contains('math-display');
             const storedPretext = mathEl.dataset.pretext;
             const replacement = document.createElement(isDisplay ? 'md' : 'me');
+
+            if (mathEl.dataset && mathEl.dataset.ptxXmlId) {
+                replacement.setAttribute('xml:id', mathEl.dataset.ptxXmlId);
+            }
 
             if (storedPretext && storedPretext.trim()) {
                 const temp = document.createElement('div');
