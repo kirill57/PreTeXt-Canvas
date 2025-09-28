@@ -698,15 +698,15 @@ class PreTeXtCanvas {
 
     getOutlineIcon(type) {
         const icons = {
-            'book': 'ðŸ“š',
-            'article': 'ðŸ“„',
-            'chapter': 'ðŸ“‚',
-            'section': 'ðŸ“‘',
-            'subsection': 'ðŸ“‹',
-            'subsubsection': 'ðŸ“',
-            'error': 'âš ï¸'
+            book: '📚',
+            article: '📰',
+            chapter: '📘',
+            section: '📗',
+            subsection: '📒',
+            subsubsection: '📓',
+            error: '⚠️',
         };
-        return icons[type] || 'â€¢';
+        return icons[type] || '•';
     }
 
     navigateToElement(elementId) {
