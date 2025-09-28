@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude">
+    <article xml:id="educational-test">
+        <title>Educational Features Test</title>
+        <section xml:id="sec-examples">
+            <title>Examples and Exercises</title>
+            <example xml:id="ex-derivative">
+                <title>Computing a Derivative</title>
+                <statement>
+                    <p>Find <m>f'(x)</m> for <m>f(x) = x^3 - 2x + 1</m>.</p>
+                </statement>
+                <solution>
+                    <p>Using power rule: <m>f'(x) = 3x^2 - 2</m>.</p>
+                </solution>
+            </example>
+        </section>
+    </article>
+</pretext>

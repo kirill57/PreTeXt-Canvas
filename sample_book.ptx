@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude">
+    <book xml:id="sample-book">
+        <title>Sample Book for Testing</title>
+        <frontmatter>
+            <titlepage>
+                <author>
+                    <personname>Test Author</personname>
+                </author>
+            </titlepage>
+        </frontmatter>
+        <chapter xml:id="ch-introduction">
+            <title>Introduction</title>
+            <section xml:id="sec-overview">
+                <title>Overview</title>
+                <p>This chapter introduces the main concepts.</p>
+            </section>
+            <section xml:id="sec-structure">
+                <title>Document Structure</title>
+                <p>This book is organized into multiple chapters and sections.</p>
+                <subsection xml:id="subsec-navigation">
+                    <title>Navigation</title>
+                    <p>Testing subsection navigation and outline generation.</p>
+                </subsection>
+            </section>
+        </chapter>
+        <chapter xml:id="ch-content">
+            <title>Main Content</title>
+            <section xml:id="sec-examples">
+                <title>Examples</title>
+                <p>This section contains various examples for testing.</p>
+            </section>
+        </chapter>
+    </book>
+</pretext>

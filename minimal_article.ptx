@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude">
+    <article xml:id="minimal-article">
+        <title>Minimal Article Test</title>
+        <section xml:id="sec-introduction">
+            <title>Introduction</title>
+            <p>This is a basic paragraph for testing simple text rendering.</p>
+            <p>This paragraph tests <em>emphasis</em> and <c>code</c> elements.</p>
+        </section>
+        <section xml:id="sec-conclusion">
+            <title>Conclusion</title>
+            <p>Testing cross-references to <xref ref="sec-introduction"/>.</p>
+        </section>
+    </article>
+</pretext>

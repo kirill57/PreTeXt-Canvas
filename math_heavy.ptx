@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude">
+    <article xml:id="math-test">
+        <title>Mathematics Test Document</title>
+        <section xml:id="sec-basic-math">
+            <title>Basic Mathematics</title>
+            <p>Inline math: <m>x^2 + y^2 = z^2</m> and <m>\frac{1}{2}</m>.</p>
+            <p>Display equation:</p>
+            <me>\int_0^1 x^2 \, dx = \frac{1}{3}</me>
+        </section>
+        <section xml:id="sec-advanced-math">
+            <title>Advanced Mathematics</title>
+            <definition xml:id="def-limit">
+                <title>Limit</title>
+                <statement>
+                    <p>The limit of <m>f(x)</m> as <m>x</m> approaches <m>a</m> is <m>L</m> if:</p>
+                    <me>\lim_{x \to a} f(x) = L</me>
+                </statement>
+            </definition>
+            <theorem xml:id="thm-fundamental">
+                <title>Fundamental Theorem of Calculus</title>
+                <statement>
+                    <p>If <m>f</m> is continuous on <m>[a,b]</m>, then:</p>
+                    <me>\int_a^b f(x) \, dx = F(b) - F(a)</me>
+                    <p>where <m>F'(x) = f(x)</m>.</p>
+                </statement>
+                <proof>
+                    <p>The proof follows from the mean value theorem...</p>
+                </proof>
+            </theorem>
+        </section>
+    </article>
+</pretext>

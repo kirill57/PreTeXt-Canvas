@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude">
+    <article xml:id="edge-case-test">
+        <title>Edge Cases Test</title>
+        <section xml:id="sec-unicode">
+            <title>Unicode Content</title>
+            <p>Testing international text: café, résumé, naïve.</p>
+            <p>Math symbols: sum, integral, infinity, real numbers.</p>
+        </section>
+        <section xml:id="sec-broken-refs">
+            <title>Broken References</title>
+            <p>Valid ref: <xref ref="sec-unicode"/>.</p>
+            <p>Broken ref: <xref ref="nonexistent-section"/>.</p>
+        </section>
+    </article>
+</pretext>
