@@ -49,9 +49,12 @@ body {
     font-weight: 600;
 }
 
-.file-controls, .view-controls {
+.file-controls, .edit-controls, .view-controls {
     display: flex;
     gap: 8px;
+}
+.edit-controls {
+    flex-wrap: wrap;
 }
 .view-controls {
     margin-left: auto;
