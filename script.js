@@ -57,13 +57,19 @@ class PreTeXtCanvas {
         // Visual editor events
         const visualContent = document.getElementById('visual-content');
         visualContent.addEventListener('input', () => this.onVisualEdit());
-        visualContent.addEventListener('click', (e) => this.selectElement(e.target));
+        visualContent.addEventListener('click', (e) => {
+            this.selectElement(e.target);
+            this.updateCursorPosition();
+        });
+        visualContent.addEventListener('mouseup', () => this.updateCursorPosition());
         visualContent.addEventListener('keyup', () => this.updateCursorPosition());
 
         // Source editor events
         const sourceContent = document.getElementById('source-content');
         sourceContent.addEventListener('input', () => this.onSourceEdit());
         sourceContent.addEventListener('scroll', () => this.syncScroll());
+        sourceContent.addEventListener('click', () => this.updateCursorPosition());
+        sourceContent.addEventListener('mouseup', () => this.updateCursorPosition());
         sourceContent.addEventListener('keyup', () => this.updateCursorPosition());
 
         // Outline navigation
@@ -916,13 +922,62 @@ class PreTeXtCanvas {
     }
 
     updateCursorPosition() {
+        const cursorPositionEl = document.getElementById('cursor-position');
+        if (!cursorPositionEl) {
+            return;
+        }
+
         const sourceContent = document.getElementById('source-content');
-        if (document.activeElement === sourceContent) {
+        const visualContent = document.getElementById('visual-content');
+
+        const setPositionText = (line, column) => {
+            cursorPositionEl.textContent = `Line ${line}, Column ${column}`;
+        };
+
+        if (sourceContent && document.activeElement === sourceContent) {
             const lines = sourceContent.value.substr(0, sourceContent.selectionStart).split('\n');
             const line = lines.length;
             const column = lines[lines.length - 1].length + 1;
-            document.getElementById('cursor-position').textContent = `Line ${line}, Column ${column}`;
+            setPositionText(line, column);
+            return;
         }
+
+        const selection = window.getSelection ? window.getSelection() : null;
+        const isNodeWithin = (node, container) => {
+            if (!node || !container) {
+                return false;
+            }
+            return node === container || container.contains(node);
+        };
+
+        if (
+            visualContent &&
+            selection &&
+            selection.rangeCount > 0 &&
+            isNodeWithin(selection.anchorNode, visualContent) &&
+            isNodeWithin(selection.focusNode, visualContent)
+        ) {
+            const focusNode = selection.focusNode;
+            const focusOffset = selection.focusOffset;
+
+            try {
+                const range = selection.getRangeAt(0).cloneRange();
+                const preCaretRange = range.cloneRange();
+                preCaretRange.selectNodeContents(visualContent);
+                preCaretRange.setEnd(focusNode, focusOffset);
+
+                const textUpToCaret = preCaretRange.toString();
+                const lines = textUpToCaret.split(/\r?\n/);
+                const line = lines.length;
+                const column = lines[lines.length - 1].length + 1;
+                setPositionText(line, column);
+                return;
+            } catch (error) {
+                // If we can't determine the caret position, fall through to reset display.
+            }
+        }
+
+        cursorPositionEl.textContent = 'Line –, Column –';
     }
 
     markDocumentModified() {
