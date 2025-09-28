@@ -12,6 +12,10 @@ body {
     overflow: hidden;
 }
 
+body.modal-open {
+    overflow: hidden;
+}
+
 :root {
     --left-sidebar-width: 280px;
     --right-sidebar-width: 280px;
@@ -772,9 +776,208 @@ body.resizing-sidebar * {
         background: #505050;
     }
 
-    .sidebar-resizer:hover::after,
-    body.resizing-sidebar .sidebar-resizer::after {
-        background: #66b0ff;
+.sidebar-resizer:hover::after,
+body.resizing-sidebar .sidebar-resizer::after {
+    background: #66b0ff;
+}
+}
+
+/* Template modal */
+.template-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.template-modal[aria-hidden="false"] {
+    display: flex;
+}
+
+.template-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(20, 24, 31, 0.45);
+}
+
+.template-modal__dialog {
+    position: relative;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 18px 56px rgba(15, 23, 42, 0.25);
+    width: min(960px, 94vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.template-modal__header {
+    padding: 24px 28px 12px;
+    border-bottom: 1px solid #eef1f6;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.template-modal__title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.template-modal__subtitle {
+    font-size: 14px;
+    color: #4b5563;
+}
+
+.template-modal__close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    border: none;
+    background: transparent;
+    font-size: 20px;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+.template-modal__close:hover,
+.template-modal__close:focus-visible {
+    background: rgba(107, 114, 128, 0.12);
+    color: #111827;
+    outline: none;
+}
+
+.template-modal__body {
+    display: flex;
+    gap: 20px;
+    padding: 20px 28px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.template-modal__list {
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.template-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #d9e2f2;
+    background: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    text-align: left;
+    color: inherit;
+}
+
+.template-card:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+.template-card:hover {
+    border-color: #9bb5e9;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+}
+
+.template-card.active {
+    border-color: #2563eb;
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+}
+
+.template-card__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.template-card__description {
+    font-size: 13px;
+    color: #4b5563;
+}
+
+.template-modal__preview {
+    flex: 1 1 auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 40%);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+}
+
+.template-preview__title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.template-preview__description {
+    font-size: 13px;
+    color: #374151;
+}
+
+.template-preview__code {
+    flex: 1;
+    background: #0f172a;
+    color: #f9fafb;
+    border-radius: 8px;
+    padding: 16px;
+    overflow: auto;
+    font-family: 'Fira Code', 'Source Code Pro', Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.template-preview__code code {
+    display: block;
+    white-space: pre;
+}
+
+.template-modal__footer {
+    border-top: 1px solid #eef1f6;
+    padding: 16px 28px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: #f9fafb;
+}
+
+.visual-xml-fallback {
+    background: #0f172a;
+    color: #f9fafb;
+    padding: 16px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+    .template-modal__body {
+        flex-direction: column;
+    }
+
+    .template-modal__list {
+        flex: 0 0 auto;
+        max-height: 220px;
     }
 }
 

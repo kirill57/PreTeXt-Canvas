@@ -142,6 +142,32 @@
         </footer>
     </div>
 
+    <!-- Template chooser modal -->
+    <div id="template-modal" class="template-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="template-modal-title">
+        <div class="template-modal__backdrop" data-template-modal-dismiss></div>
+        <div class="template-modal__dialog">
+            <header class="template-modal__header">
+                <h2 id="template-modal-title" class="template-modal__title">Create a new document</h2>
+                <p class="template-modal__subtitle">Select a starting template to load into the visual and source editors.</p>
+                <button type="button" class="template-modal__close" data-template-modal-dismiss aria-label="Close template chooser">×</button>
+            </header>
+            <div class="template-modal__body">
+                <div id="template-option-list" class="template-modal__list" role="listbox" aria-labelledby="template-modal-title">
+                    <!-- Template cards rendered dynamically -->
+                </div>
+                <div class="template-modal__preview" id="template-preview" aria-live="polite">
+                    <h3 id="template-preview-title" class="template-preview__title">Select a template</h3>
+                    <p id="template-preview-description" class="template-preview__description">Template details and a snippet preview will appear here.</p>
+                    <pre id="template-preview-code" class="template-preview__code"><code></code></pre>
+                </div>
+            </div>
+            <footer class="template-modal__footer">
+                <button type="button" class="btn btn-secondary" id="template-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="template-apply" disabled>Use template</button>
+            </footer>
+        </div>
+    </div>
+
     <!-- MathJax Configuration -->
     <script>
         window.MathJax = {
@@ -158,6 +184,7 @@
         };
     </script>
 
+    <script src="templates.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
