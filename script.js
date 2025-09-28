@@ -314,6 +314,33 @@ const PALETTE_CONFIGURATION = [
     }
 ];
 
+const DEFAULT_TEMPLATE_LABEL = 'Blank PreTeXt Document';
+const DEFAULT_TEMPLATE_SKELETON = `<?xml version="1.0" encoding="UTF-8"?>
+<pretext xmlns:xi="http://www.w3.org/2001/XInclude" xml:lang="en-US">
+    <docinfo>
+        <macros>
+        \\newcommand{\\R}{\\mathbb R}
+        </macros>
+    </docinfo>
+
+    <book xml:id="new-book">
+        <title>New PreTeXt Project</title>
+
+        <chapter xml:id="ch-introduction">
+            <title>Introduction</title>
+
+            <section xml:id="sec-getting-started">
+                <title>Getting Started</title>
+
+                <p>
+                    Start writing your content here.
+                </p>
+
+            </section>
+        </chapter>
+    </book>
+</pretext>`;
+
 const OUTLINE_INCLUDED_TAGS = new Set([
     'pretext',
     'book',
@@ -370,6 +397,44 @@ class PreTeXtCanvas {
         this.paletteExpansionState = {};
         this.paletteElementLookup = this.buildPaletteLookup(this.paletteConfig);
 
+        this.templateStorageKey = 'pretext-canvas-last-template';
+        this.templates = this.loadTemplates();
+        this.lastUsedTemplateId = this.loadPersistedTemplateId();
+        this.templateModalInitialized = false;
+        this.isTemplateModalOpen = false;
+        this.templateModal = null;
+        this.templateOptionList = null;
+        this.templatePreviewTitle = null;
+        this.templatePreviewDescription = null;
+        this.templatePreviewCode = null;
+        this.templateApplyButton = null;
+        this.templateCancelButton = null;
+        this.templateCards = [];
+        this.activeTemplateId = null;
+        this.previousFocusedElement = null;
+        this.handleTemplateModalKeydown = (event) => {
+            if (!this.isTemplateModalOpen) {
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                this.closeTemplateModal();
+                return;
+            }
+
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                this.navigateTemplateSelection(1);
+                return;
+            }
+
+            if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                this.navigateTemplateSelection(-1);
+            }
+        };
+
         this.init();
     }
 
@@ -378,6 +443,7 @@ class PreTeXtCanvas {
         this.setupEventListeners();
         this.setupLayoutControls();
         this.setupDragAndDrop();
+        this.setupTemplateChooser();
         this.generateOutline();
         this.updateStatus('Ready');
 
@@ -412,6 +478,63 @@ class PreTeXtCanvas {
         });
 
         return lookup;
+    }
+
+    loadTemplates() {
+        if (Array.isArray(window.PreTeXtTemplates) && window.PreTeXtTemplates.length > 0) {
+            return window.PreTeXtTemplates.map((template) => ({
+                id: template.id,
+                label: template.label || DEFAULT_TEMPLATE_LABEL,
+                description: template.description || '',
+                preview: template.preview || '',
+                skeleton: template.skeleton || DEFAULT_TEMPLATE_SKELETON
+            }));
+        }
+
+        return [{
+            id: 'default',
+            label: DEFAULT_TEMPLATE_LABEL,
+            description: 'A minimal PreTeXt book with a starter chapter and section.',
+            preview: '<book xml:id="new-book">…</book>',
+            skeleton: DEFAULT_TEMPLATE_SKELETON
+        }];
+    }
+
+    loadPersistedTemplateId() {
+        try {
+            return window.localStorage.getItem(this.templateStorageKey);
+        } catch (error) {
+            console.warn('Unable to access stored template preference:', error);
+            return null;
+        }
+    }
+
+    persistLastTemplateId(templateId) {
+        this.lastUsedTemplateId = templateId;
+        try {
+            window.localStorage.setItem(this.templateStorageKey, templateId);
+        } catch (error) {
+            console.warn('Unable to persist template preference:', error);
+        }
+    }
+
+    getTemplateById(templateId) {
+        if (!templateId || !Array.isArray(this.templates)) {
+            return null;
+        }
+        return this.templates.find((template) => template.id === templateId) || null;
+    }
+
+    getInitialTemplateId() {
+        if (this.lastUsedTemplateId && this.getTemplateById(this.lastUsedTemplateId)) {
+            return this.lastUsedTemplateId;
+        }
+
+        if (Array.isArray(this.templates) && this.templates.length > 0) {
+            return this.templates[0].id;
+        }
+
+        return null;
     }
 
     isPaletteSectionExpanded(category, index) {
@@ -2235,52 +2358,19 @@ class PreTeXtCanvas {
             }
         }
 
-        const defaultDocument = `<?xml version="1.0" encoding="UTF-8"?>
-<pretext xmlns:xi="http://www.w3.org/2001/XInclude" xml:lang="en-US">
-    <docinfo>
-        <macros>
-        \\newcommand{\\R}{\\mathbb R}
-        </macros>
-    </docinfo>
-    
-    <book xml:id="new-book">
-        <title>New PreTeXt Document</title>
-        
-        <chapter xml:id="ch-introduction">
-            <title>Introduction</title>
-            
-            <section xml:id="sec-getting-started">
-                <title>Getting Started</title>
-                
-                <p>
-                    Start writing your content here.
-                </p>
-                
-            </section>
-        </chapter>
-    </book>
-</pretext>`;
-
-        const sourceContent = document.getElementById('source-content');
-        const visualContent = document.getElementById('visual-content');
-
-        if (sourceContent) {
-            sourceContent.value = defaultDocument;
+        if (this.openTemplateModal()) {
+            return;
         }
 
-        if (visualContent) {
-            visualContent.innerHTML = this.xmlToHtml(defaultDocument);
+        const fallbackId = this.getInitialTemplateId();
+        const fallbackTemplate = this.getTemplateById(fallbackId) || (this.templates[0] || null);
+
+        if (fallbackTemplate) {
+            this.persistLastTemplateId(fallbackTemplate.id);
+            this.applyTemplateSkeleton(fallbackTemplate.skeleton || DEFAULT_TEMPLATE_SKELETON, fallbackTemplate.label || DEFAULT_TEMPLATE_LABEL);
+        } else {
+            this.applyTemplateSkeleton(DEFAULT_TEMPLATE_SKELETON, DEFAULT_TEMPLATE_LABEL);
         }
-
-        this.invalidateSourceLocationMap();
-        this.renderMath();
-        this.syncSourceSelectionToVisual();
-
-        this.isDocumentModified = false;
-        this.generateOutline();
-        this.validateDocument();
-        this.updateStatus('New document created');
-        this.recordHistorySnapshot(true);
     }
 
     openFile() {
@@ -2298,7 +2388,7 @@ class PreTeXtCanvas {
             this.invalidateSourceLocationMap();
 
             // Convert to visual representation
-            const html = this.xmlToHtml(content);
+            const html = this.convertXmlToHtmlSafe(content);
             document.getElementById('visual-content').innerHTML = html;
 
             this.isDocumentModified = false;
@@ -2340,13 +2430,13 @@ class PreTeXtCanvas {
 
     setupDragAndDrop() {
         const visualContent = document.getElementById('visual-content');
-        
+
         // Allow dropping on visual editor
         visualContent.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
         });
-        
+
         visualContent.addEventListener('drop', (e) => {
             e.preventDefault();
             const elementType = e.dataTransfer.getData('text/element-type');
@@ -2354,6 +2444,308 @@ class PreTeXtCanvas {
                 this.insertElement(elementType);
             }
         });
+    }
+
+    setupTemplateChooser() {
+        if (this.templateModalInitialized) {
+            return;
+        }
+
+        this.templateModal = document.getElementById('template-modal');
+        this.templateOptionList = document.getElementById('template-option-list');
+        this.templatePreviewTitle = document.getElementById('template-preview-title');
+        this.templatePreviewDescription = document.getElementById('template-preview-description');
+        const previewCodeBlock = document.getElementById('template-preview-code');
+        this.templatePreviewCode = previewCodeBlock ? (previewCodeBlock.querySelector('code') || previewCodeBlock) : null;
+        this.templateApplyButton = document.getElementById('template-apply');
+        this.templateCancelButton = document.getElementById('template-cancel');
+
+        if (!this.templateModal || !this.templateOptionList || !this.templateApplyButton) {
+            return;
+        }
+
+        if (this.templateCancelButton) {
+            this.templateCancelButton.addEventListener('click', () => this.closeTemplateModal());
+        }
+
+        const dismissTriggers = this.templateModal.querySelectorAll('[data-template-modal-dismiss]');
+        dismissTriggers.forEach((trigger) => {
+            trigger.addEventListener('click', () => this.closeTemplateModal());
+        });
+
+        this.templateApplyButton.addEventListener('click', () => this.confirmTemplateSelection());
+
+        this.renderTemplateOptions(this.getInitialTemplateId());
+
+        document.addEventListener('keydown', this.handleTemplateModalKeydown);
+
+        this.templateModalInitialized = true;
+    }
+
+    renderTemplateOptions(selectedId) {
+        if (!this.templateOptionList) {
+            return;
+        }
+
+        this.templateOptionList.innerHTML = '';
+        this.templateCards = [];
+
+        if (!Array.isArray(this.templates)) {
+            this.templates = [];
+        }
+
+        this.templates.forEach((template) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'template-card';
+            card.dataset.templateId = template.id;
+            card.setAttribute('role', 'option');
+            card.setAttribute('aria-selected', 'false');
+
+            const title = document.createElement('span');
+            title.className = 'template-card__title';
+            title.textContent = template.label || DEFAULT_TEMPLATE_LABEL;
+            card.appendChild(title);
+
+            const description = document.createElement('span');
+            description.className = 'template-card__description';
+            description.textContent = template.description || '';
+            card.appendChild(description);
+
+            card.addEventListener('click', () => {
+                this.selectTemplate(template.id, true);
+            });
+
+            card.addEventListener('dblclick', () => {
+                this.selectTemplate(template.id, false);
+                this.confirmTemplateSelection();
+            });
+
+            this.templateOptionList.appendChild(card);
+            this.templateCards.push(card);
+        });
+
+        this.activeTemplateId = null;
+
+        const targetId = selectedId && this.getTemplateById(selectedId)
+            ? selectedId
+            : (this.templates[0] ? this.templates[0].id : null);
+
+        if (targetId) {
+            this.selectTemplate(targetId, false);
+        } else {
+            if (this.templateApplyButton) {
+                this.templateApplyButton.disabled = true;
+                this.templateApplyButton.textContent = 'Use template';
+            }
+            this.updateTemplatePreview(null);
+        }
+    }
+
+    selectTemplate(templateId, focusCard = false) {
+        const template = this.getTemplateById(templateId);
+
+        if (!template) {
+            if (this.templateApplyButton) {
+                this.templateApplyButton.disabled = true;
+                this.templateApplyButton.textContent = 'Use template';
+            }
+            return;
+        }
+
+        this.activeTemplateId = template.id;
+
+        if (Array.isArray(this.templateCards)) {
+            this.templateCards.forEach((card) => {
+                const isActive = card.dataset.templateId === template.id;
+                card.classList.toggle('active', isActive);
+                card.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                if (isActive && focusCard) {
+                    card.focus();
+                    this.scrollTemplateIntoView(template.id);
+                }
+            });
+        }
+
+        this.updateTemplatePreview(template);
+
+        if (this.templateApplyButton) {
+            this.templateApplyButton.disabled = false;
+            this.templateApplyButton.textContent = `Use ${template.label || DEFAULT_TEMPLATE_LABEL}`;
+        }
+    }
+
+    focusActiveTemplateCard() {
+        if (!Array.isArray(this.templateCards)) {
+            return;
+        }
+
+        const activeCard = this.templateCards.find((card) => card.dataset.templateId === this.activeTemplateId);
+        if (activeCard) {
+            activeCard.focus();
+            this.scrollTemplateIntoView(this.activeTemplateId);
+        }
+    }
+
+    updateTemplatePreview(template) {
+        if (this.templatePreviewTitle) {
+            this.templatePreviewTitle.textContent = template ? (template.label || DEFAULT_TEMPLATE_LABEL) : 'Select a template';
+        }
+
+        if (this.templatePreviewDescription) {
+            this.templatePreviewDescription.textContent = template ? (template.description || '') : 'Template details and a snippet preview will appear here.';
+        }
+
+        if (this.templatePreviewCode) {
+            const snippet = template ? (template.preview || template.skeleton || '') : '';
+            this.templatePreviewCode.textContent = snippet;
+        }
+    }
+
+    openTemplateModal() {
+        if (!Array.isArray(this.templates) || this.templates.length === 0) {
+            return false;
+        }
+
+        if (!this.templateModalInitialized) {
+            this.setupTemplateChooser();
+        }
+
+        if (!this.templateModalInitialized || !this.templateModal) {
+            return false;
+        }
+
+        const initialId = this.getInitialTemplateId();
+        this.renderTemplateOptions(initialId);
+
+        this.previousFocusedElement = document.activeElement;
+        this.templateModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+        this.isTemplateModalOpen = true;
+
+        if (initialId) {
+            this.focusActiveTemplateCard();
+        } else if (this.templateCancelButton) {
+            this.templateCancelButton.focus();
+        }
+
+        return true;
+    }
+
+    closeTemplateModal() {
+        if (!this.templateModalInitialized || !this.isTemplateModalOpen) {
+            return;
+        }
+
+        this.isTemplateModalOpen = false;
+
+        if (this.templateModal) {
+            this.templateModal.setAttribute('aria-hidden', 'true');
+        }
+
+        document.body.classList.remove('modal-open');
+
+        if (this.previousFocusedElement && typeof this.previousFocusedElement.focus === 'function') {
+            this.previousFocusedElement.focus();
+        }
+
+        this.previousFocusedElement = null;
+    }
+
+    confirmTemplateSelection() {
+        const template = this.getTemplateById(this.activeTemplateId) || (this.templates[0] || null);
+
+        if (!template) {
+            return;
+        }
+
+        this.closeTemplateModal();
+        this.persistLastTemplateId(template.id);
+        this.loadTemplateById(template.id);
+    }
+
+    navigateTemplateSelection(step) {
+        if (!Array.isArray(this.templateCards) || this.templateCards.length === 0) {
+            return;
+        }
+
+        const currentIndex = this.templateCards.findIndex((card) => card.dataset.templateId === this.activeTemplateId);
+        const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+        let nextIndex = safeIndex + step;
+
+        if (nextIndex < 0) {
+            nextIndex = this.templateCards.length - 1;
+        } else if (nextIndex >= this.templateCards.length) {
+            nextIndex = 0;
+        }
+
+        const nextCard = this.templateCards[nextIndex];
+        if (nextCard) {
+            this.selectTemplate(nextCard.dataset.templateId, true);
+        }
+    }
+
+    scrollTemplateIntoView(templateId) {
+        if (!Array.isArray(this.templateCards)) {
+            return;
+        }
+
+        const targetCard = this.templateCards.find((card) => card.dataset.templateId === templateId);
+        if (targetCard && typeof targetCard.scrollIntoView === 'function') {
+            targetCard.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+    }
+
+    loadTemplateById(templateId) {
+        const template = this.getTemplateById(templateId);
+        if (template) {
+            this.applyTemplateSkeleton(template.skeleton || DEFAULT_TEMPLATE_SKELETON, template.label || DEFAULT_TEMPLATE_LABEL);
+        } else {
+            this.applyTemplateSkeleton(DEFAULT_TEMPLATE_SKELETON, DEFAULT_TEMPLATE_LABEL);
+        }
+    }
+
+    applyTemplateSkeleton(skeleton, label) {
+        const sourceContent = document.getElementById('source-content');
+        const visualContent = document.getElementById('visual-content');
+        const templateSkeleton = skeleton || DEFAULT_TEMPLATE_SKELETON;
+
+        if (sourceContent) {
+            sourceContent.value = templateSkeleton;
+            sourceContent.scrollTop = 0;
+            sourceContent.selectionStart = 0;
+            sourceContent.selectionEnd = 0;
+        }
+
+        if (visualContent) {
+            const html = this.convertXmlToHtmlSafe(templateSkeleton);
+            visualContent.innerHTML = html;
+            visualContent.scrollTop = 0;
+        }
+
+        this.invalidateSourceLocationMap();
+        this.renderMath();
+        this.syncSourceSelectionToVisual();
+        this.updateCursorPosition();
+
+        this.isDocumentModified = false;
+        this.generateOutline();
+        this.validateDocument();
+
+        const snapshot = this.createSnapshot();
+        this.resetHistoryWithSnapshot(snapshot);
+
+        const statusLabel = label || DEFAULT_TEMPLATE_LABEL;
+        this.updateStatus(`Loaded "${statusLabel}" template`);
+    }
+
+    convertXmlToHtmlSafe(xml) {
+        try {
+            return this.xmlToHtml(xml);
+        } catch (error) {
+            console.warn('Unable to render template for visual editor:', error);
+            return `<pre class="visual-xml-fallback">${this.escapeHtml(xml)}</pre>`;
+        }
     }
 
     handleKeyboardShortcuts(event) {
@@ -2457,6 +2849,18 @@ class PreTeXtCanvas {
         }
 
         cursorPositionEl.textContent = 'Line –, Column –';
+    }
+
+    resetHistoryWithSnapshot(snapshot) {
+        if (snapshot) {
+            this.undoStack = [snapshot];
+            this.lastSnapshot = snapshot;
+        } else {
+            this.undoStack = [];
+            this.lastSnapshot = null;
+        }
+
+        this.redoStack = [];
     }
 
     createSnapshot() {
