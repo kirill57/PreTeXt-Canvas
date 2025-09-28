@@ -1,5 +1,165 @@
 // PreTeXt Canvas - Main JavaScript File
 
+const PALETTE_CONFIGURATION = [
+    {
+        id: 'structure',
+        label: 'Structure',
+        icon: '📚',
+        tooltip: 'Scaffold your document with top-level structural elements.',
+        defaultExpanded: true,
+        elements: [
+            {
+                id: 'book',
+                label: 'Book',
+                icon: '📚',
+                tooltip: 'Insert a <book> root element.',
+                template: '<book xml:id="book-id">\n    <title>Book Title</title>\n    <chapter xml:id="ch-1">\n        <title>Chapter Title</title>\n        <p>Chapter content...</p>\n    </chapter>\n</book>'
+            },
+            {
+                id: 'article',
+                label: 'Article',
+                icon: '📄',
+                tooltip: 'Insert an <article> container.',
+                template: '<article xml:id="article-id">\n    <title>Article Title</title>\n    <p>Article content...</p>\n</article>'
+            },
+            {
+                id: 'chapter',
+                label: 'Chapter',
+                icon: '📂',
+                tooltip: 'Insert a <chapter> section.',
+                template: '<chapter xml:id="ch-new">\n    <title>Chapter Title</title>\n    <p>Chapter content...</p>\n</chapter>'
+            },
+            {
+                id: 'section',
+                label: 'Section',
+                icon: '📑',
+                tooltip: 'Insert a <section> block.',
+                template: '<section xml:id="sec-new">\n    <title>Section Title</title>\n    <p>Section content...</p>\n</section>'
+            },
+            {
+                id: 'subsection',
+                label: 'Subsection',
+                icon: '📋',
+                tooltip: 'Insert a <subsection> block.',
+                template: '<subsection xml:id="subsec-new">\n    <title>Subsection Title</title>\n    <p>Subsection content...</p>\n</subsection>'
+            }
+        ]
+    },
+    {
+        id: 'content',
+        label: 'Content',
+        icon: '✏️',
+        tooltip: 'Author textual narrative and common list structures.',
+        sections: [
+            {
+                id: 'textual',
+                label: 'Text Blocks',
+                elements: [
+                    {
+                        id: 'p',
+                        label: 'Paragraph',
+                        icon: '¶',
+                        tooltip: 'Insert a <p> paragraph.',
+                        template: '<p>New paragraph text...</p>'
+                    }
+                ]
+            },
+            {
+                id: 'lists',
+                label: 'Lists',
+                elements: [
+                    {
+                        id: 'ol',
+                        label: 'Ordered List',
+                        icon: '🔢',
+                        tooltip: 'Insert an <ol> ordered list.',
+                        template: '<ol>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ol>'
+                    },
+                    {
+                        id: 'ul',
+                        label: 'Unordered List',
+                        icon: '•',
+                        tooltip: 'Insert a <ul> unordered list.',
+                        template: '<ul>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ul>'
+                    },
+                    {
+                        id: 'dl',
+                        label: 'Definition List',
+                        icon: '📝',
+                        tooltip: 'Insert a <dl> definition list.',
+                        template: '<dl>\n    <li>\n        <title>Term</title>\n        <p>Definition</p>\n    </li>\n</dl>'
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'math-science',
+        label: 'Math & Science',
+        icon: '🧮',
+        tooltip: 'Mathematical statements and STEM annotations.',
+        elements: [
+            {
+                id: 'me',
+                label: 'Math Expression',
+                icon: '∑',
+                tooltip: 'Inline <me> math element.',
+                template: '<me>x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}</me>'
+            },
+            {
+                id: 'md',
+                label: 'Math Display',
+                icon: '∫',
+                tooltip: 'Block <md> math element.',
+                template: '<md>\n    <mrow>f(x) &amp;= x^2 + 2x + 1</mrow>\n    <mrow>&amp;= (x + 1)^2</mrow>\n</md>'
+            },
+            {
+                id: 'theorem',
+                label: 'Theorem',
+                icon: '📐',
+                tooltip: 'Insert a <theorem> with statement and proof.',
+                template: '<theorem xml:id="thm-new">\n    <title>Theorem Title</title>\n    <statement>\n        <p>Theorem statement...</p>\n    </statement>\n    <proof>\n        <p>Proof...</p>\n    </proof>\n</theorem>'
+            },
+            {
+                id: 'definition',
+                label: 'Definition',
+                icon: '📖',
+                tooltip: 'Insert a <definition> block.',
+                template: '<definition xml:id="def-new">\n    <title>Definition Title</title>\n    <statement>\n        <p>Definition statement...</p>\n    </statement>\n</definition>'
+            }
+        ]
+    },
+    {
+        id: 'media',
+        label: 'Media',
+        icon: '🖼️',
+        tooltip: 'Enhance your content with rich media.',
+        elements: [
+            {
+                id: 'figure',
+                label: 'Figure',
+                icon: '🖼️',
+                tooltip: 'Insert a <figure> wrapper.',
+                template: '<figure xml:id="fig-new">\n    <caption>Figure Caption</caption>\n    <image source="path/to/image.png" width="50%"/>\n</figure>'
+            },
+            {
+                id: 'image',
+                label: 'Image',
+                icon: '📷',
+                tooltip: 'Insert a standalone <image>.',
+                template: '<image source="path/to/image.png" width="50%"/>'
+            },
+            {
+                id: 'video',
+                label: 'Video',
+                icon: '🎥',
+                tooltip: 'Insert a <video> placeholder.',
+                template: '<video xml:id="vid-new" youtube="VIDEO_ID"/>'
+            }
+        ]
+    }
+];
+
 class PreTeXtCanvas {
     constructor() {
         this.currentView = 'visual';
@@ -23,23 +183,267 @@ class PreTeXtCanvas {
         this.historyDebounceDelay = 400;
         this.sourceLocationCache = null;
         this.isSyncingSelection = false;
+        this.paletteConfig = PALETTE_CONFIGURATION;
+        this.paletteStateStorageKey = 'pretext-canvas-palette-state';
+        this.paletteExpansionState = {};
+        this.paletteElementLookup = this.buildPaletteLookup(this.paletteConfig);
 
         this.init();
     }
 
     init() {
+        this.renderPalette();
         this.setupEventListeners();
         this.setupLayoutControls();
         this.setupDragAndDrop();
         this.generateOutline();
         this.updateStatus('Ready');
-        
+
         // Initialize MathJax if available
         if (window.MathJax && window.MathJax.typesetPromise) {
             this.renderMath();
         }
 
         this.recordHistorySnapshot(true);
+    }
+
+    buildPaletteLookup(config) {
+        const lookup = {};
+        const registerElement = (element) => {
+            if (element && element.id) {
+                lookup[element.id] = element;
+            }
+        };
+
+        config.forEach((category) => {
+            if (Array.isArray(category.elements)) {
+                category.elements.forEach(registerElement);
+            }
+
+            if (Array.isArray(category.sections)) {
+                category.sections.forEach((section) => {
+                    if (Array.isArray(section.elements)) {
+                        section.elements.forEach(registerElement);
+                    }
+                });
+            }
+        });
+
+        return lookup;
+    }
+
+    isPaletteSectionExpanded(category, index) {
+        if (Object.prototype.hasOwnProperty.call(this.paletteExpansionState, category.id)) {
+            return Boolean(this.paletteExpansionState[category.id]);
+        }
+
+        if (typeof category.defaultExpanded === 'boolean') {
+            return category.defaultExpanded;
+        }
+
+        return index === 0;
+    }
+
+    renderPalette() {
+        const paletteContainer = document.getElementById('palette-container');
+        if (!paletteContainer) {
+            return;
+        }
+
+        this.paletteElementLookup = this.buildPaletteLookup(this.paletteConfig);
+        this.paletteExpansionState = { ...this.loadPaletteState() };
+
+        paletteContainer.innerHTML = '';
+
+        this.paletteConfig.forEach((category, index) => {
+            const group = document.createElement('div');
+            group.classList.add('element-group');
+            group.dataset.categoryId = category.id;
+
+            const header = document.createElement('h4');
+            const toggleButton = document.createElement('button');
+            const contentId = `palette-section-${category.id}`;
+            const expanded = this.isPaletteSectionExpanded(category, index);
+
+            toggleButton.type = 'button';
+            toggleButton.classList.add('palette-toggle');
+            toggleButton.setAttribute('aria-expanded', String(expanded));
+            toggleButton.setAttribute('aria-controls', contentId);
+            toggleButton.title = category.tooltip || '';
+            toggleButton.innerHTML = `
+                <span class="palette-icon" aria-hidden="true">${category.icon || ''}</span>
+                <span class="palette-title">${category.label}</span>
+            `;
+
+            header.appendChild(toggleButton);
+            group.appendChild(header);
+
+            const content = document.createElement('div');
+            content.id = contentId;
+            content.classList.add('palette-content');
+
+            if (!Array.isArray(category.sections) || category.sections.length === 0) {
+                content.classList.add('elements');
+            }
+
+            if (!expanded) {
+                content.hidden = true;
+                content.setAttribute('aria-hidden', 'true');
+            }
+
+            if (Array.isArray(category.sections) && category.sections.length > 0) {
+                category.sections.forEach((section) => {
+                    const subsectionWrapper = document.createElement('div');
+                    subsectionWrapper.classList.add('palette-subsection');
+
+                    if (section.label) {
+                        const subsectionHeader = document.createElement('h5');
+                        subsectionHeader.textContent = section.label;
+                        subsectionWrapper.appendChild(subsectionHeader);
+                    }
+
+                    const subsectionElements = document.createElement('div');
+                    subsectionElements.classList.add('elements');
+
+                    if (Array.isArray(section.elements)) {
+                        section.elements.forEach((element) => {
+                            subsectionElements.appendChild(this.createPaletteElementButton(element));
+                        });
+                    }
+
+                    subsectionWrapper.appendChild(subsectionElements);
+                    content.appendChild(subsectionWrapper);
+                });
+            } else if (Array.isArray(category.elements)) {
+                category.elements.forEach((element) => {
+                    content.appendChild(this.createPaletteElementButton(element));
+                });
+            }
+
+            group.appendChild(content);
+            toggleButton.addEventListener('click', () => {
+                this.togglePaletteSection(category.id, content, toggleButton);
+            });
+            paletteContainer.appendChild(group);
+        });
+
+        this.bindPaletteInteractions(paletteContainer);
+    }
+
+    createPaletteElementButton(element) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.classList.add('element-btn');
+        button.dataset.element = element.id;
+        button.title = element.tooltip || element.label;
+        button.innerHTML = `${element.icon ? `${element.icon} ` : ''}${element.label}`;
+        return button;
+    }
+
+    bindPaletteInteractions(rootElement = document) {
+        if (!rootElement) {
+            return;
+        }
+
+        const buttons = rootElement.querySelectorAll('.element-btn');
+        buttons.forEach((button) => {
+            if (button.dataset.bound === 'true') {
+                return;
+            }
+
+            button.dataset.bound = 'true';
+            button.draggable = true;
+
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                const elementType = event.currentTarget.dataset.element;
+                if (elementType) {
+                    this.insertElement(elementType);
+                }
+            });
+
+            button.addEventListener('dragstart', (event) => {
+                this.handlePaletteDragStart(event);
+            });
+        });
+    }
+
+    handlePaletteDragStart(event) {
+        if (!event || !event.dataTransfer) {
+            return;
+        }
+
+        const button = event.target && event.target.closest ? event.target.closest('.element-btn') : null;
+        if (!button) {
+            return;
+        }
+
+        const elementType = button.dataset.element;
+        if (elementType) {
+            event.dataTransfer.setData('text/element-type', elementType);
+            event.dataTransfer.effectAllowed = 'copy';
+        }
+    }
+
+    togglePaletteSection(categoryId, content, toggleButton) {
+        if (!content || !toggleButton) {
+            return;
+        }
+
+        const expanded = toggleButton.getAttribute('aria-expanded') === 'true';
+        const nextExpanded = !expanded;
+
+        toggleButton.setAttribute('aria-expanded', String(nextExpanded));
+        if (nextExpanded) {
+            content.hidden = false;
+            content.removeAttribute('aria-hidden');
+        } else {
+            content.hidden = true;
+            content.setAttribute('aria-hidden', 'true');
+        }
+
+        this.paletteExpansionState = {
+            ...this.paletteExpansionState,
+            [categoryId]: nextExpanded
+        };
+
+        this.savePaletteState(this.paletteExpansionState);
+    }
+
+    loadPaletteState() {
+        try {
+            if (typeof window === 'undefined' || !window.localStorage) {
+                return {};
+            }
+
+            const stored = window.localStorage.getItem(this.paletteStateStorageKey);
+            if (!stored) {
+                return {};
+            }
+
+            const parsed = JSON.parse(stored);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (error) {
+            console.warn('Unable to load palette expansion state:', error);
+            return {};
+        }
+    }
+
+    savePaletteState(state) {
+        try {
+            if (typeof window === 'undefined' || !window.localStorage) {
+                return;
+            }
+
+            window.localStorage.setItem(this.paletteStateStorageKey, JSON.stringify(state));
+        } catch (error) {
+            console.warn('Unable to persist palette expansion state:', error);
+        }
+    }
+
+    getTemplateForElement(elementType) {
+        const definition = this.paletteElementLookup[elementType];
+        return definition ? definition.template : null;
     }
 
     setupEventListeners() {
@@ -61,11 +465,6 @@ class PreTeXtCanvas {
         // Panel switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchPanel(e.target.dataset.panel));
-        });
-
-        // Element palette
-        document.querySelectorAll('.element-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this.insertElement(e.target.dataset.element));
         });
 
         // Visual editor events
@@ -363,31 +762,19 @@ class PreTeXtCanvas {
     }
 
     insertElement(elementType) {
-        const templates = {
-            'book': '<book xml:id="book-id">\n    <title>Book Title</title>\n    <chapter xml:id="ch-1">\n        <title>Chapter Title</title>\n        <p>Chapter content...</p>\n    </chapter>\n</book>',
-            'article': '<article xml:id="article-id">\n    <title>Article Title</title>\n    <p>Article content...</p>\n</article>',
-            'chapter': '<chapter xml:id="ch-new">\n    <title>Chapter Title</title>\n    <p>Chapter content...</p>\n</chapter>',
-            'section': '<section xml:id="sec-new">\n    <title>Section Title</title>\n    <p>Section content...</p>\n</section>',
-            'subsection': '<subsection xml:id="subsec-new">\n    <title>Subsection Title</title>\n    <p>Subsection content...</p>\n</subsection>',
-            'p': '<p>New paragraph text...</p>',
-            'ol': '<ol>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ol>',
-            'ul': '<ul>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ul>',
-            'dl': '<dl>\n    <li>\n        <title>Term</title>\n        <p>Definition</p>\n    </li>\n</dl>',
-            'me': '<me>x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}</me>',
-            'md': '<md>\n    <mrow>f(x) &amp;= x^2 + 2x + 1</mrow>\n    <mrow>&amp;= (x + 1)^2</mrow>\n</md>',
-            'theorem': '<theorem xml:id="thm-new">\n    <title>Theorem Title</title>\n    <statement>\n        <p>Theorem statement...</p>\n    </statement>\n    <proof>\n        <p>Proof...</p>\n    </proof>\n</theorem>',
-            'definition': '<definition xml:id="def-new">\n    <title>Definition Title</title>\n    <statement>\n        <p>Definition statement...</p>\n    </statement>\n</definition>',
-            'figure': '<figure xml:id="fig-new">\n    <caption>Figure Caption</caption>\n    <image source="path/to/image.png" width="50%"/>\n</figure>',
-            'image': '<image source="path/to/image.png" width="50%"/>',
-            'video': '<video xml:id="vid-new" youtube="VIDEO_ID"/>'
-        };
+        const template = this.getTemplateForElement(elementType);
+
+        if (!template) {
+            this.updateStatus(`No template defined for element: ${elementType}`);
+            return;
+        }
 
         if (this.currentView === 'visual' || this.currentView === 'split') {
-            this.insertIntoVisualEditor(elementType, templates[elementType]);
+            this.insertIntoVisualEditor(elementType, template);
         }
-        
+
         if (this.currentView === 'source' || this.currentView === 'split') {
-            this.insertIntoSourceEditor(templates[elementType]);
+            this.insertIntoSourceEditor(template);
         }
 
         this.markDocumentModified();
@@ -1481,14 +1868,6 @@ class PreTeXtCanvas {
             if (elementType) {
                 this.insertElement(elementType);
             }
-        });
-        
-        // Make element buttons draggable
-        document.querySelectorAll('.element-btn').forEach(btn => {
-            btn.draggable = true;
-            btn.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/element-type', e.target.dataset.element);
-            });
         });
     }
 
