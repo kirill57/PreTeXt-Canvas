@@ -178,6 +178,8 @@ const PRETEXT_ELEMENT_DEFINITIONS = [
     }
 ];
 
+const INLINE_INSERTION_TYPES = new Set(['me']);
+
 const PALETTE_CONFIGURATION = [
     {
         id: 'structure',
@@ -561,6 +563,7 @@ class PreTeXtCanvas {
         this.setupLayoutControls();
         this.setupDragAndDrop();
         this.setupTemplateChooser();
+        this.syncToVisual();
         this.generateOutline();
         this.updateStatus('Ready');
 
@@ -1284,13 +1287,29 @@ class PreTeXtCanvas {
         }
 
         const template = this.prepareTemplateForInsertion(elementType, rawTemplate);
+        const visualContent = document.getElementById('visual-content');
+        const sourceContent = document.getElementById('source-content');
+        const activeElement = document.activeElement;
+        const visualHasFocus = visualContent && (visualContent === activeElement || visualContent.contains(activeElement));
+        const sourceHasFocus = sourceContent && sourceContent === activeElement;
 
-        if (this.currentView === 'visual' || this.currentView === 'split') {
-            this.insertIntoVisualEditor(elementType, template);
-        }
+        const shouldInsertIntoVisual = this.currentView === 'visual'
+            || (this.currentView === 'split' && (!sourceHasFocus || visualHasFocus));
+        const shouldInsertIntoSource = this.currentView === 'source'
+            || (this.currentView === 'split' && sourceHasFocus);
 
-        if (this.currentView === 'source' || this.currentView === 'split') {
-            this.insertIntoSourceEditor(template);
+        const insertedVisual = shouldInsertIntoVisual
+            ? Boolean(this.insertIntoVisualEditor(elementType, template))
+            : false;
+
+        const insertedSource = shouldInsertIntoSource
+            ? this.insertIntoSourceEditor(template)
+            : false;
+
+        if (insertedSource) {
+            this.syncToVisual();
+        } else if (insertedVisual) {
+            this.syncToSource();
         }
 
         this.markDocumentModified();
@@ -1301,28 +1320,96 @@ class PreTeXtCanvas {
 
     insertIntoVisualEditor(elementType, template) {
         const visualContent = document.getElementById('visual-content');
+        if (!visualContent) {
+            return null;
+        }
+
         const selection = window.getSelection();
-        
+        if (!selection) {
+            return null;
+        }
+
+        let range = null;
+
         if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = this.xmlToHtml(template);
-            
-            range.deleteContents();
-            range.insertNode(tempDiv.firstChild);
-            
-            // Position cursor at the end of inserted content
-            range.setStartAfter(tempDiv.firstChild);
+            const candidate = selection.getRangeAt(0);
+            if (visualContent.contains(candidate.commonAncestorContainer)) {
+                range = candidate;
+            }
+        }
+
+        if (!range) {
+            visualContent.focus();
+            range = document.createRange();
+            const fallbackTarget = (this.selectedElement && visualContent.contains(this.selectedElement))
+                ? this.selectedElement
+                : (visualContent.lastChild || visualContent);
+            if (fallbackTarget.nodeType === Node.ELEMENT_NODE) {
+                range.selectNodeContents(fallbackTarget);
+                range.collapse(false);
+            } else {
+                range.selectNodeContents(visualContent);
+                range.collapse(false);
+            }
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        if (!INLINE_INSERTION_TYPES.has(elementType) && range.startContainer) {
+            const adjustTarget = range.startContainer.nodeType === Node.TEXT_NODE
+                ? range.startContainer.parentElement
+                : range.startContainer;
+
+            if (adjustTarget && adjustTarget.nodeType === Node.ELEMENT_NODE && visualContent.contains(adjustTarget)) {
+                const blockTarget = adjustTarget.closest('p, section, subsection, chapter, book, article, div, ol, ul, li, figure, example, exercise');
+                if (blockTarget && blockTarget !== visualContent) {
+                    range.setStartAfter(blockTarget);
+                    range.collapse(true);
+                }
+            }
+        }
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = this.xmlToHtml(template);
+
+        if (!tempDiv.firstChild) {
+            return null;
+        }
+
+        const fragment = document.createDocumentFragment();
+        let lastInserted = null;
+        let firstInsertedElement = null;
+        while (tempDiv.firstChild) {
+            lastInserted = tempDiv.firstChild;
+            if (!firstInsertedElement && lastInserted.nodeType === Node.ELEMENT_NODE) {
+                firstInsertedElement = lastInserted;
+            }
+            fragment.appendChild(lastInserted);
+        }
+
+        range.deleteContents();
+        range.insertNode(fragment);
+
+        if (lastInserted) {
+            range.setStartAfter(lastInserted);
             range.collapse(true);
             selection.removeAllRanges();
             selection.addRange(range);
         }
-        
+
         this.renderMath();
+        if (firstInsertedElement) {
+            this.selectElement(firstInsertedElement);
+        }
+        return lastInserted;
     }
 
     insertIntoSourceEditor(template) {
         const sourceContent = document.getElementById('source-content');
+        if (!sourceContent) {
+            return false;
+        }
+
         const start = sourceContent.selectionStart;
         const end = sourceContent.selectionEnd;
         const text = sourceContent.value;
@@ -1331,7 +1418,7 @@ class PreTeXtCanvas {
         sourceContent.selectionStart = sourceContent.selectionEnd = start + template.length + 2;
         sourceContent.focus();
         this.invalidateSourceLocationMap();
-        this.syncSourceSelectionToVisual();
+        return true;
     }
 
     xmlToHtml(xml) {
@@ -1370,7 +1457,7 @@ class PreTeXtCanvas {
 
         // Convert inline math (<me>) to visual containers
         container.querySelectorAll('me').forEach((meEl) => {
-            const wrapper = document.createElement('div');
+            const wrapper = document.createElement('span');
             wrapper.className = 'math-expression';
             const originalContent = meEl.innerHTML;
             wrapper.dataset.pretext = originalContent;
@@ -1625,7 +1712,7 @@ class PreTeXtCanvas {
         return best ? best.path : null;
     }
 
-    scrollSourceToIndex(sourceContent, index, endIndex = index) {
+    scrollSourceToIndex(sourceContent, index, endIndex = index, options = {}) {
         if (!sourceContent) {
             return;
         }
@@ -1633,12 +1720,13 @@ class PreTeXtCanvas {
         const value = sourceContent.value;
         const clampedStart = Math.max(0, Math.min(index, value.length));
         const clampedEnd = Math.max(clampedStart, Math.min(endIndex, value.length));
+        const collapseSelection = Boolean(options.collapseSelection);
         const before = value.slice(0, clampedStart);
         const beforeLines = before.split(/\r?\n/).length;
         const totalLines = value.length ? value.split(/\r?\n/).length : 1;
 
         sourceContent.selectionStart = clampedStart;
-        sourceContent.selectionEnd = clampedEnd;
+        sourceContent.selectionEnd = collapseSelection ? clampedStart : clampedEnd;
 
         const denominator = Math.max(totalLines - 1, 1);
         const ratio = (beforeLines - 1) / denominator;
@@ -1780,7 +1868,7 @@ class PreTeXtCanvas {
 
         this.isSyncingSelection = true;
         try {
-            this.scrollSourceToIndex(sourceContent, startIndex, endIndex);
+            this.scrollSourceToIndex(sourceContent, startIndex, endIndex, { collapseSelection: true });
             if (typeof sourceContent.focus === 'function') {
                 try {
                     sourceContent.focus({ preventScroll: true });
@@ -1963,6 +2051,13 @@ class PreTeXtCanvas {
             el.removeAttribute('data-ptx-xml-id');
         });
 
+        container.querySelectorAll('.element-selected').forEach((el) => {
+            el.classList.remove('element-selected');
+            if (!el.className || !el.className.trim()) {
+                el.removeAttribute('class');
+            }
+        });
+
         return container.innerHTML;
     }
 
@@ -1970,6 +2065,9 @@ class PreTeXtCanvas {
         // Remove previous selection
         document.querySelectorAll('.element-selected').forEach(el => {
             el.classList.remove('element-selected');
+            if (!el.classList.length) {
+                el.removeAttribute('class');
+            }
         });
 
         // Add selection to clicked element
