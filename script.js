@@ -314,6 +314,34 @@ const PALETTE_CONFIGURATION = [
     }
 ];
 
+const OUTLINE_INCLUDED_TAGS = new Set([
+    'pretext',
+    'book',
+    'article',
+    'frontmatter',
+    'backmatter',
+    'part',
+    'chapter',
+    'section',
+    'subsection',
+    'subsubsection',
+    'appendix',
+    'appendices',
+    'preface',
+    'introduction',
+    'conclusion',
+    'glossary',
+    'index',
+    'exercises',
+    'exercise',
+    'example',
+    'problem',
+    'project',
+    'activity',
+    'exploration',
+    'task'
+]);
+
 class PreTeXtCanvas {
     constructor() {
         this.currentView = 'visual';
@@ -662,9 +690,31 @@ class PreTeXtCanvas {
                 return;
             }
 
+            const toggleButton = e.target.closest('.outline-toggle');
+            if (toggleButton) {
+                e.preventDefault();
+                const node = toggleButton.closest('.outline-node');
+                if (node) {
+                    const expanded = toggleButton.getAttribute('aria-expanded') === 'true';
+                    const nextExpanded = !expanded;
+                    toggleButton.setAttribute('aria-expanded', String(nextExpanded));
+                    node.setAttribute('aria-expanded', String(nextExpanded));
+                    const childList = node.querySelector(':scope > .outline-children');
+                    if (childList) {
+                        childList.hidden = !nextExpanded;
+                    }
+                    const caret = toggleButton.querySelector('.outline-caret');
+                    if (caret) {
+                        caret.textContent = nextExpanded ? '▾' : '▸';
+                    }
+                    node.classList.toggle('outline-node-collapsed', !nextExpanded);
+                }
+                return;
+            }
+
             const outlineItem = e.target.closest('.outline-item');
             if (outlineItem) {
-                this.navigateToElement(outlineItem.dataset.elementId);
+                this.navigateToElement(outlineItem.dataset.elementId, outlineItem.dataset.ptxPath);
                 return;
             }
 
@@ -1854,82 +1904,188 @@ class PreTeXtCanvas {
     }
 
     parseOutline(xml) {
-        const outline = [];
         const parser = new DOMParser();
-        
+
         try {
             const doc = parser.parseFromString(xml, 'text/xml');
             const rootElement = doc.documentElement;
-            
-            if (rootElement.nodeName === 'parsererror') {
-                return [{ title: 'Parse Error', type: 'error', id: 'error' }];
+
+            if (!rootElement || rootElement.nodeName === 'parsererror') {
+                return [this.buildOutlineErrorNode()];
             }
-            
-            this.extractOutlineFromElement(rootElement, outline, 0);
+
+            const outlineNodes = this.extractOutlineFromElement(rootElement, '', new Map());
+            return outlineNodes.length > 0 ? outlineNodes : [];
         } catch (e) {
-            return [{ title: 'Parse Error', type: 'error', id: 'error' }];
+            return [this.buildOutlineErrorNode()];
         }
-        
-        return outline;
     }
 
-    extractOutlineFromElement(element, outline, level) {
-        const structuralElements = ['book', 'article', 'chapter', 'section', 'subsection', 'subsubsection'];
-        
-        if (structuralElements.includes(element.nodeName)) {
-            const titleElement = element.querySelector('title');
-            const title = titleElement ? titleElement.textContent : element.nodeName;
-            const id = element.getAttribute('xml:id') || element.getAttribute('id') || '';
-            
-            outline.push({
-                title: title,
-                type: element.nodeName,
-                id: id,
-                level: level
-            });
-            
-            level++;
+    buildOutlineErrorNode() {
+        return {
+            title: 'Parse Error',
+            type: 'error',
+            id: 'error',
+            path: '',
+            children: []
+        };
+    }
+
+    shouldIncludeElementInOutline(tagName) {
+        return OUTLINE_INCLUDED_TAGS.has(tagName);
+    }
+
+    extractOutlineFromElement(element, parentPath, siblingCounts) {
+        if (!element || element.nodeType !== 1) {
+            return [];
         }
-        
-        // Recursively process child elements
-        for (const child of element.children) {
-            this.extractOutlineFromElement(child, outline, level);
+
+        const tagName = (element.localName || element.nodeName || '').toLowerCase();
+        if (!tagName) {
+            return [];
         }
+
+        const counts = siblingCounts instanceof Map ? siblingCounts : new Map();
+        const currentCount = (counts.get(tagName) || 0) + 1;
+        counts.set(tagName, currentCount);
+        const path = parentPath ? `${parentPath}/${tagName}[${currentCount}]` : `${tagName}[${currentCount}]`;
+
+        const childCounts = new Map();
+        const children = [];
+        Array.from(element.children).forEach((child) => {
+            const childNodes = this.extractOutlineFromElement(child, path, childCounts);
+            if (childNodes && childNodes.length > 0) {
+                children.push(...childNodes);
+            }
+        });
+
+        if (!this.shouldIncludeElementInOutline(tagName) && tagName !== 'parsererror') {
+            return children;
+        }
+
+        const titleElement = Array.from(element.children).find((child) => {
+            const name = (child.localName || child.nodeName || '').toLowerCase();
+            return name === 'title';
+        });
+        const rawTitle = titleElement ? titleElement.textContent || '' : '';
+        const labelAttribute = element.getAttribute('label');
+        const displayTitle = rawTitle.trim() || labelAttribute || tagName;
+        const id = element.getAttribute('xml:id') || element.getAttribute('id') || '';
+
+        return [{
+            title: displayTitle,
+            type: tagName,
+            id,
+            path,
+            children
+        }];
     }
 
     renderOutline(outline) {
-        return outline.map(item => {
-            const indent = 'outline-indent'.repeat(item.level);
+        if (!Array.isArray(outline) || outline.length === 0) {
+            return '<div class="outline-empty">No outline available</div>';
+        }
+
+        const renderNodes = (nodes, depth) => nodes.map((node) => renderNode(node, depth)).join('');
+
+        const renderNode = (node, depth) => {
+            if (!node) {
+                return '';
+            }
+
+            const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+            const safeTitle = this.escapeHtml(node.title || node.type || '');
+            const toggleLabel = this.escapeHtml(`Toggle ${node.title || node.type || 'item'}`);
+            const icon = this.escapeHtml(this.getOutlineIcon(node.type));
+            const idAttribute = node.id ? ` data-element-id="${this.escapeHtml(node.id)}"` : ' data-element-id=""';
+            const pathAttribute = node.path ? ` data-ptx-path="${this.escapeHtml(node.path)}"` : '';
+            const typeAttribute = node.type ? ` data-outline-type="${this.escapeHtml(node.type)}"` : '';
+            const depthAttribute = ` data-depth="${depth}"`;
+
+            const toggleMarkup = hasChildren
+                ? `<button type="button" class="outline-toggle" aria-expanded="true" aria-label="${toggleLabel}"><span class="outline-caret" aria-hidden="true">▾</span></button>`
+                : '<span class="outline-toggle outline-toggle-spacer" aria-hidden="true"></span>';
+
+            const childrenMarkup = hasChildren
+                ? `<ul class="outline-children" role="group">${renderNodes(node.children, depth + 1)}</ul>`
+                : '';
+
+            const roleAttributes = hasChildren ? ' role="treeitem" aria-expanded="true"' : ' role="treeitem"';
+
             return `
-                <div class="outline-item ${indent}" data-element-id="${item.id}">
-                    <span class="outline-icon">${this.getOutlineIcon(item.type)}</span>
-                    <span class="outline-title">${item.title}</span>
-                </div>
+                <li class="outline-node"${roleAttributes}>
+                    <div class="outline-row">
+                        ${toggleMarkup}
+                        <button type="button" class="outline-item"${idAttribute}${pathAttribute}${typeAttribute}${depthAttribute}>
+                            <span class="outline-icon" aria-hidden="true">${icon}</span>
+                            <span class="outline-title">${safeTitle}</span>
+                        </button>
+                    </div>
+                    ${childrenMarkup}
+                </li>
             `;
-        }).join('');
+        };
+
+        return `<ul class="outline-tree-root" role="tree">${renderNodes(outline, 0)}</ul>`;
     }
 
     getOutlineIcon(type) {
         const icons = {
+            pretext: '🗂️',
             book: '📚',
             article: '📰',
+            frontmatter: '📄',
+            backmatter: '📄',
+            part: '🗃️',
             chapter: '📘',
             section: '📗',
             subsection: '📒',
             subsubsection: '📓',
-            error: '⚠️',
+            appendix: '📎',
+            appendices: '📎',
+            preface: '📝',
+            introduction: '📝',
+            conclusion: '📝',
+            glossary: '📖',
+            index: '🔖',
+            exercises: '🗒️',
+            exercise: '📝',
+            example: '💡',
+            problem: '❓',
+            project: '🛠️',
+            activity: '🎯',
+            exploration: '🧭',
+            task: '🧩',
+            error: '⚠️'
         };
         return icons[type] || '•';
     }
 
-    navigateToElement(elementId) {
-        if (!elementId || elementId === 'error') return;
-        
+    navigateToElement(elementId, elementPath) {
+        if ((!elementId || elementId === 'error') && !elementPath) {
+            return;
+        }
+
+        let resolvedPath = elementPath || '';
+
         if (this.currentView === 'visual' || this.currentView === 'split') {
-            const escapedId = this.escapeForAttributeSelector(elementId);
-            const element = document.querySelector(`[id="${escapedId}"]`) ||
-                document.querySelector(`[data-ptx-xml-id="${escapedId}"]`);
+            let element = null;
+
+            if (elementId && elementId !== 'error') {
+                const escapedId = this.escapeForAttributeSelector(elementId);
+                element = document.querySelector(`[id="${escapedId}"]`) ||
+                    document.querySelector(`[data-ptx-xml-id="${escapedId}"]`);
+            }
+
+            if (!element && resolvedPath) {
+                element = this.findVisualElementByPath(resolvedPath);
+            }
+
             if (element) {
+                if (!resolvedPath && element.dataset && element.dataset.ptxPath) {
+                    resolvedPath = element.dataset.ptxPath;
+                }
+
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 this.selectElement(element);
                 this.syncSelectionFromVisual(element);
@@ -1938,14 +2094,35 @@ class PreTeXtCanvas {
 
         if (this.currentView === 'source' || this.currentView === 'split') {
             const sourceContent = document.getElementById('source-content');
-            const text = sourceContent.value;
-            const searchPattern = new RegExp(`xml:id="${elementId}"`, 'i');
-            const match = text.search(searchPattern);
-            
-            if (match !== -1) {
+            if (!sourceContent) {
+                return;
+            }
+
+            const text = sourceContent.value || '';
+            let handled = false;
+
+            if (elementId && elementId !== 'error') {
+                const searchPattern = new RegExp(`xml:id="${elementId}"`, 'i');
+                const match = text.search(searchPattern);
+
+                if (match !== -1) {
+                    this.scrollSourceToIndex(sourceContent, match, match);
+                    handled = true;
+                }
+            }
+
+            if (!handled && resolvedPath) {
+                const location = this.getSourceLocationForPath(resolvedPath);
+                if (location) {
+                    const startIndex = typeof location.start === 'number' ? location.start : 0;
+                    const endIndex = typeof location.end === 'number' ? location.end : startIndex;
+                    this.scrollSourceToIndex(sourceContent, startIndex, endIndex);
+                    handled = true;
+                }
+            }
+
+            if (handled) {
                 sourceContent.focus();
-                sourceContent.setSelectionRange(match, match);
-                sourceContent.scrollTop = sourceContent.scrollHeight * (match / text.length);
                 this.syncSourceSelectionToVisual();
             }
         }

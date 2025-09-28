@@ -272,8 +272,60 @@ body.resizing-sidebar * {
 }
 
 /* Document outline */
+#outline-tree,
 .outline-tree {
     font-size: 14px;
+}
+
+.outline-tree-root,
+.outline-children {
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+}
+
+.outline-children {
+    padding-left: 16px;
+}
+
+.outline-node {
+    margin: 0;
+}
+
+.outline-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.outline-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+.outline-toggle:hover {
+    color: #1976d2;
+}
+
+.outline-toggle:focus-visible {
+    outline: 2px solid #1976d2;
+    border-radius: 3px;
+}
+
+.outline-toggle-spacer {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .outline-item {
@@ -284,10 +336,26 @@ body.resizing-sidebar * {
     display: flex;
     align-items: center;
     gap: 6px;
+    border: none;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    flex: 1;
+    justify-content: flex-start;
 }
 
 .outline-item:hover {
     background: #f0f8ff;
+}
+
+.outline-item:focus {
+    background: #f0f8ff;
+    outline: none;
+}
+
+.outline-item:focus-visible {
+    outline: 2px solid #1976d2;
 }
 
 .outline-item.selected {
@@ -295,8 +363,26 @@ body.resizing-sidebar * {
     color: #1976d2;
 }
 
-.outline-indent {
-    margin-left: 16px;
+.outline-icon {
+    width: 1.5em;
+    text-align: center;
+}
+
+.outline-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.outline-empty {
+    font-style: italic;
+    color: #666;
+    padding: 8px;
+}
+
+.outline-node-collapsed > .outline-row .outline-item {
+    opacity: 0.85;
 }
 
 /* Editor container */
