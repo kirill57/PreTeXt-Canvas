@@ -1,5 +1,29 @@
 // PreTeXt Canvas - Main JavaScript File
 
+const PALETTE_SNIPPET_TEMPLATES = {
+    book: `<book xml:id="{{xmlid:book}}">\n    <title>Book Title</title>\n    <chapter xml:id="{{xmlid:ch}}">\n        <title>Chapter Title</title>\n        <p>Chapter content...</p>\n    </chapter>\n</book>`,
+    article: `<article xml:id="{{xmlid:article}}">\n    <title>Article Title</title>\n    <p>Article content...</p>\n</article>`,
+    chapter: `<chapter xml:id="{{xmlid:ch}}">\n    <title>Chapter Title</title>\n    <p>Chapter content...</p>\n</chapter>`,
+    section: `<section xml:id="{{xmlid:sec}}">\n    <title>Section Title</title>\n    <p>Section content...</p>\n</section>`,
+    subsection: `<subsection xml:id="{{xmlid:subsec}}">\n    <title>Subsection Title</title>\n    <p>Subsection content...</p>\n</subsection>`,
+    paragraph: '<p>New paragraph text...</p>',
+    orderedList: `<ol>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ol>`,
+    unorderedList: `<ul>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ul>`,
+    definition: `<definition xml:id="{{xmlid:def}}">\n    <title>Definition Title</title>\n    <statement>\n        <p>Definition statement...</p>\n    </statement>\n</definition>`,
+    theorem: `<theorem xml:id="{{xmlid:thm}}">\n    <title>Theorem Title</title>\n    <statement>\n        <p>Theorem statement...</p>\n    </statement>\n</theorem>`,
+    theoremWithProof: `<theorem xml:id="{{xmlid:thm}}">\n    <title>Theorem Title</title>\n    <statement>\n        <p>Theorem statement...</p>\n    </statement>\n    <proof>\n        <p>Proof goes here...</p>\n    </proof>\n</theorem>`,
+    mathExpression: '<me>x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}</me>',
+    mathDisplay: `<md>\n    <mrow>f(x) &amp;= x^2 + 2x + 1</mrow>\n    <mrow>&amp;= (x + 1)^2</mrow>\n</md>`,
+    figure: `<figure xml:id="{{xmlid:fig}}">\n    <caption>Figure Caption</caption>\n    <image source="path/to/image.png" width="50%"/>\n</figure>`,
+    image: '<image source="path/to/image.png" width="50%"/>',
+    video: '<video xml:id="{{xmlid:vid}}" youtube="VIDEO_ID"/>',
+    example: `<example xml:id="{{xmlid:ex}}">\n    <title>Example Title</title>\n    <statement>\n        <p>Example prompt...</p>\n    </statement>\n</example>`,
+    exampleWithSolution: `<example xml:id="{{xmlid:ex}}">\n    <title>Example Title</title>\n    <statement>\n        <p>Example prompt...</p>\n    </statement>\n    <solution xml:id="{{xmlid:sol}}">\n        <p>Solution steps...</p>\n    </solution>\n</example>`,
+    exercise: `<exercise xml:id="{{xmlid:exercise}}">\n    <title>Exercise Title</title>\n    <statement>\n        <p>Exercise prompt...</p>\n    </statement>\n</exercise>`,
+    exerciseWithSupport: `<exercise xml:id="{{xmlid:exercise}}">\n    <title>Exercise Title</title>\n    <statement>\n        <p>Exercise prompt...</p>\n    </statement>\n    <hint>\n        <p>Hint text...</p>\n    </hint>\n    <solution xml:id="{{xmlid:sol}}">\n        <p>Solution steps...</p>\n    </solution>\n    <answer>\n        <p>Final answer...</p>\n    </answer>\n</exercise>`,
+    sideBySideFigure: `<figure xml:id="{{xmlid:fig}}">\n    <caption>Side-by-side comparison caption.</caption>\n    <sidebyside widths="50% 50%">\n        <image source="path/to/first-image.png" width="100%"/>\n        <image source="path/to/second-image.png" width="100%"/>\n    </sidebyside>\n</figure>`
+};
+
 const PRETEXT_ELEMENT_DEFINITIONS = [
     {
         type: 'sectioning',
@@ -167,35 +191,35 @@ const PALETTE_CONFIGURATION = [
                 label: 'Book',
                 icon: '📚',
                 tooltip: 'Insert a <book> root element.',
-                template: '<book xml:id="book-id">\n    <title>Book Title</title>\n    <chapter xml:id="ch-1">\n        <title>Chapter Title</title>\n        <p>Chapter content...</p>\n    </chapter>\n</book>'
+                template: PALETTE_SNIPPET_TEMPLATES.book
             },
             {
                 id: 'article',
                 label: 'Article',
                 icon: '📄',
                 tooltip: 'Insert an <article> container.',
-                template: '<article xml:id="article-id">\n    <title>Article Title</title>\n    <p>Article content...</p>\n</article>'
+                template: PALETTE_SNIPPET_TEMPLATES.article
             },
             {
                 id: 'chapter',
                 label: 'Chapter',
                 icon: '📂',
                 tooltip: 'Insert a <chapter> section.',
-                template: '<chapter xml:id="ch-new">\n    <title>Chapter Title</title>\n    <p>Chapter content...</p>\n</chapter>'
+                template: PALETTE_SNIPPET_TEMPLATES.chapter
             },
             {
                 id: 'section',
                 label: 'Section',
                 icon: '📑',
                 tooltip: 'Insert a <section> block.',
-                template: '<section xml:id="sec-new">\n    <title>Section Title</title>\n    <p>Section content...</p>\n</section>'
+                template: PALETTE_SNIPPET_TEMPLATES.section
             },
             {
                 id: 'subsection',
                 label: 'Subsection',
                 icon: '📋',
                 tooltip: 'Insert a <subsection> block.',
-                template: '<subsection xml:id="subsec-new">\n    <title>Subsection Title</title>\n    <p>Subsection content...</p>\n</subsection>'
+                template: PALETTE_SNIPPET_TEMPLATES.subsection
             }
         ]
     },
@@ -214,7 +238,7 @@ const PALETTE_CONFIGURATION = [
                         label: 'Paragraph',
                         icon: '¶',
                         tooltip: 'Insert a <p> paragraph.',
-                        template: '<p>New paragraph text...</p>'
+                        template: PALETTE_SNIPPET_TEMPLATES.paragraph
                     }
                 ]
             },
@@ -227,14 +251,14 @@ const PALETTE_CONFIGURATION = [
                         label: 'Ordered List',
                         icon: '🔢',
                         tooltip: 'Insert an <ol> ordered list.',
-                        template: '<ol>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ol>'
+                        template: PALETTE_SNIPPET_TEMPLATES.orderedList
                     },
                     {
                         id: 'ul',
                         label: 'Unordered List',
                         icon: '•',
                         tooltip: 'Insert a <ul> unordered list.',
-                        template: '<ul>\n    <li><p>First item</p></li>\n    <li><p>Second item</p></li>\n</ul>'
+                        template: PALETTE_SNIPPET_TEMPLATES.unorderedList
                     },
                     {
                         id: 'dl',
@@ -252,34 +276,107 @@ const PALETTE_CONFIGURATION = [
         label: 'Math & Science',
         icon: '🧮',
         tooltip: 'Mathematical statements and STEM annotations.',
-        elements: [
+        sections: [
             {
-                id: 'me',
-                label: 'Math Expression',
-                icon: '∑',
-                tooltip: 'Inline <me> math element.',
-                template: '<me>x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}</me>'
+                id: 'math-inline',
+                label: 'Mathematics',
+                elements: [
+                    {
+                        id: 'me',
+                        label: 'Math Expression',
+                        icon: '∑',
+                        tooltip: 'Inline <me> math element.',
+                        template: PALETTE_SNIPPET_TEMPLATES.mathExpression
+                    },
+                    {
+                        id: 'md',
+                        label: 'Math Display',
+                        icon: '∫',
+                        tooltip: 'Block <md> math element.',
+                        template: PALETTE_SNIPPET_TEMPLATES.mathDisplay
+                    }
+                ]
             },
             {
-                id: 'md',
-                label: 'Math Display',
-                icon: '∫',
-                tooltip: 'Block <md> math element.',
-                template: '<md>\n    <mrow>f(x) &amp;= x^2 + 2x + 1</mrow>\n    <mrow>&amp;= (x + 1)^2</mrow>\n</md>'
+                id: 'math-blocks',
+                label: 'Block Environments',
+                elements: [
+                    {
+                        id: 'theorem',
+                        label: 'Theorem',
+                        icon: '📐',
+                        tooltip: 'Insert a <theorem> statement.',
+                        template: PALETTE_SNIPPET_TEMPLATES.theorem
+                    },
+                    {
+                        id: 'definition',
+                        label: 'Definition',
+                        icon: '📖',
+                        tooltip: 'Insert a <definition> block.',
+                        template: PALETTE_SNIPPET_TEMPLATES.definition
+                    }
+                ]
             },
             {
-                id: 'theorem',
-                label: 'Theorem',
-                icon: '📐',
-                tooltip: 'Insert a <theorem> with statement and proof.',
-                template: '<theorem xml:id="thm-new">\n    <title>Theorem Title</title>\n    <statement>\n        <p>Theorem statement...</p>\n    </statement>\n    <proof>\n        <p>Proof...</p>\n    </proof>\n</theorem>'
+                id: 'math-composite',
+                label: 'Composite Snippets',
+                elements: [
+                    {
+                        id: 'theorem-proof',
+                        label: 'Theorem + Proof',
+                        icon: '🧠',
+                        tooltip: 'Insert a theorem scaffolded with a proof section.',
+                        template: PALETTE_SNIPPET_TEMPLATES.theoremWithProof
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'learning',
+        label: 'Exercises & Examples',
+        icon: '🎓',
+        tooltip: 'Practice material, worked examples, and supporting scaffolding.',
+        sections: [
+            {
+                id: 'learning-basic',
+                label: 'Single Blocks',
+                elements: [
+                    {
+                        id: 'example',
+                        label: 'Example',
+                        icon: '💡',
+                        tooltip: 'Insert an <example> block.',
+                        template: PALETTE_SNIPPET_TEMPLATES.example
+                    },
+                    {
+                        id: 'exercise',
+                        label: 'Exercise',
+                        icon: '📝',
+                        tooltip: 'Insert an <exercise> block.',
+                        template: PALETTE_SNIPPET_TEMPLATES.exercise
+                    }
+                ]
             },
             {
-                id: 'definition',
-                label: 'Definition',
-                icon: '📖',
-                tooltip: 'Insert a <definition> block.',
-                template: '<definition xml:id="def-new">\n    <title>Definition Title</title>\n    <statement>\n        <p>Definition statement...</p>\n    </statement>\n</definition>'
+                id: 'learning-composite',
+                label: 'Composite Snippets',
+                elements: [
+                    {
+                        id: 'example-solution',
+                        label: 'Example + Solution',
+                        icon: '💡',
+                        tooltip: 'Insert an example paired with a worked solution.',
+                        template: PALETTE_SNIPPET_TEMPLATES.exampleWithSolution
+                    },
+                    {
+                        id: 'exercise-support',
+                        label: 'Exercise + Hint/Solution',
+                        icon: '🧠',
+                        tooltip: 'Insert an exercise scaffolded with hint, solution, and answer.',
+                        template: PALETTE_SNIPPET_TEMPLATES.exerciseWithSupport
+                    }
+                ]
             }
         ]
     },
@@ -288,27 +385,46 @@ const PALETTE_CONFIGURATION = [
         label: 'Media',
         icon: '🖼️',
         tooltip: 'Enhance your content with rich media.',
-        elements: [
+        sections: [
             {
-                id: 'figure',
-                label: 'Figure',
-                icon: '🖼️',
-                tooltip: 'Insert a <figure> wrapper.',
-                template: '<figure xml:id="fig-new">\n    <caption>Figure Caption</caption>\n    <image source="path/to/image.png" width="50%"/>\n</figure>'
+                id: 'media-standard',
+                label: 'Standard Media',
+                elements: [
+                    {
+                        id: 'figure',
+                        label: 'Figure',
+                        icon: '🖼️',
+                        tooltip: 'Insert a <figure> wrapper.',
+                        template: PALETTE_SNIPPET_TEMPLATES.figure
+                    },
+                    {
+                        id: 'image',
+                        label: 'Image',
+                        icon: '📷',
+                        tooltip: 'Insert a standalone <image>.',
+                        template: PALETTE_SNIPPET_TEMPLATES.image
+                    },
+                    {
+                        id: 'video',
+                        label: 'Video',
+                        icon: '🎥',
+                        tooltip: 'Insert a <video> placeholder.',
+                        template: PALETTE_SNIPPET_TEMPLATES.video
+                    }
+                ]
             },
             {
-                id: 'image',
-                label: 'Image',
-                icon: '📷',
-                tooltip: 'Insert a standalone <image>.',
-                template: '<image source="path/to/image.png" width="50%"/>'
-            },
-            {
-                id: 'video',
-                label: 'Video',
-                icon: '🎥',
-                tooltip: 'Insert a <video> placeholder.',
-                template: '<video xml:id="vid-new" youtube="VIDEO_ID"/>'
+                id: 'media-composite',
+                label: 'Composite Layouts',
+                elements: [
+                    {
+                        id: 'sidebyside-figure',
+                        label: 'Side-by-Side Figure',
+                        icon: '🖼️',
+                        tooltip: 'Insert a figure with a two-column side-by-side layout.',
+                        template: PALETTE_SNIPPET_TEMPLATES.sideBySideFigure
+                    }
+                ]
             }
         ]
     }
@@ -410,6 +526,7 @@ class PreTeXtCanvas {
         this.templateApplyButton = null;
         this.templateCancelButton = null;
         this.templateCards = [];
+        this.generatedXmlIdCache = new Set();
         this.activeTemplateId = null;
         this.previousFocusedElement = null;
         this.handleTemplateModalKeydown = (event) => {
@@ -751,6 +868,76 @@ class PreTeXtCanvas {
         return definition ? definition.template : null;
     }
 
+    prepareTemplateForInsertion(elementType, template) {
+        if (!template) {
+            return template;
+        }
+
+        const placeholderPattern = /\{\{xmlid:([a-zA-Z0-9_-]+)\}\}/g;
+        return template.replace(placeholderPattern, (_, requestedPrefix) => {
+            return this.generateUniqueXmlId(requestedPrefix || elementType || 'element');
+        });
+    }
+
+    getExistingXmlIds() {
+        const ids = new Set();
+
+        if (this.generatedXmlIdCache && this.generatedXmlIdCache.size > 0) {
+            this.generatedXmlIdCache.forEach((value) => ids.add(value));
+        }
+
+        const sourceContent = document.getElementById('source-content');
+        if (sourceContent && typeof sourceContent.value === 'string' && sourceContent.value.length > 0) {
+            const idPattern = /xml:id="([^"]+)"/g;
+            let match;
+            while ((match = idPattern.exec(sourceContent.value)) !== null) {
+                ids.add(match[1]);
+            }
+        }
+
+        const visualContent = document.getElementById('visual-content');
+        if (visualContent) {
+            visualContent.querySelectorAll('[xml\:id]').forEach((element) => {
+                const value = element.getAttribute('xml:id');
+                if (value) {
+                    ids.add(value);
+                }
+            });
+
+            visualContent.querySelectorAll('[data-ptx-xml-id]').forEach((element) => {
+                const value = element.getAttribute('data-ptx-xml-id');
+                if (value) {
+                    ids.add(value);
+                }
+            });
+        }
+
+        return ids;
+    }
+
+    generateUniqueXmlId(prefix) {
+        const sanitizedPrefix = (prefix || 'element')
+            .replace(/[^a-zA-Z0-9_-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'element';
+        const existingIds = this.getExistingXmlIds();
+
+        let candidate = sanitizedPrefix;
+        let counter = 1;
+
+        while (existingIds.has(candidate)) {
+            candidate = `${sanitizedPrefix}-${counter}`;
+            counter += 1;
+        }
+
+        this.generatedXmlIdCache.add(candidate);
+        return candidate;
+    }
+
+    resetGeneratedXmlIdCache() {
+        this.generatedXmlIdCache.clear();
+    }
+
     setupEventListeners() {
         // View switching
         document.getElementById('visual-view').addEventListener('click', () => this.switchView('visual'));
@@ -1089,12 +1276,14 @@ class PreTeXtCanvas {
     }
 
     insertElement(elementType) {
-        const template = this.getTemplateForElement(elementType);
+        const rawTemplate = this.getTemplateForElement(elementType);
 
-        if (!template) {
+        if (!rawTemplate) {
             this.updateStatus(`No template defined for element: ${elementType}`);
             return;
         }
+
+        const template = this.prepareTemplateForInsertion(elementType, rawTemplate);
 
         if (this.currentView === 'visual' || this.currentView === 'split') {
             this.insertIntoVisualEditor(elementType, template);
@@ -2391,6 +2580,7 @@ class PreTeXtCanvas {
             const html = this.convertXmlToHtmlSafe(content);
             document.getElementById('visual-content').innerHTML = html;
 
+            this.resetGeneratedXmlIdCache();
             this.isDocumentModified = false;
             this.generateOutline();
             this.validateDocument();
@@ -2723,6 +2913,7 @@ class PreTeXtCanvas {
             visualContent.scrollTop = 0;
         }
 
+        this.resetGeneratedXmlIdCache();
         this.invalidateSourceLocationMap();
         this.renderMath();
         this.syncSourceSelectionToVisual();
