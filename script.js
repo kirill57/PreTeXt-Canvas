@@ -1,5 +1,159 @@
 // PreTeXt Canvas - Main JavaScript File
 
+const PRETEXT_ELEMENT_DEFINITIONS = [
+    {
+        type: 'sectioning',
+        label: 'Sectioning',
+        description: 'Structural divisions that organize the document hierarchy.',
+        tags: ['book', 'article', 'part', 'chapter', 'section', 'subsection', 'subsubsection', 'appendix'],
+        buildGroups(app, tagName, element) {
+            return [
+                {
+                    id: 'identity',
+                    title: 'Identification',
+                    description: 'Set attributes that support cross references and navigation.',
+                    attributes: [
+                        {
+                            name: 'xml:id',
+                            label: 'XML ID',
+                            defaultValue: app.generateDefaultXmlId(tagName, element),
+                            placeholder: `${tagName}-identifier`,
+                            description: 'Provide a stable, descriptive identifier (e.g., sec-introduction).',
+                            removeWhenEmpty: true,
+                            required: true
+                        },
+                        {
+                            name: 'lang',
+                            label: 'Language Override',
+                            placeholder: 'en',
+                            description: 'Override the inherited language if this section is authored in another language.',
+                            removeWhenEmpty: true
+                        }
+                    ]
+                },
+                {
+                    id: 'structure-help',
+                    title: 'Authoring Tips',
+                    helpText: 'Remember to include a <title> and at least one paragraph or subordinate section.'
+                }
+            ];
+        }
+    },
+    {
+        type: 'exercise',
+        label: 'Exercise',
+        description: 'Assessment and example material with optional hints, solutions, and answers.',
+        tags: ['exercise', 'example', 'problem', 'project', 'activity', 'exploration', 'task'],
+        buildGroups(app, tagName, element) {
+            return [
+                {
+                    id: 'identity',
+                    title: 'Identification',
+                    description: 'Ensure every exercise can be referenced and catalogued.',
+                    attributes: [
+                        {
+                            name: 'xml:id',
+                            label: 'XML ID',
+                            defaultValue: app.generateDefaultXmlId(tagName, element),
+                            placeholder: `${tagName}-identifier`,
+                            description: 'Use consistent IDs so hints, solutions, and references stay in sync.',
+                            removeWhenEmpty: true,
+                            required: true
+                        },
+                        {
+                            name: 'marker',
+                            label: 'Custom Marker',
+                            placeholder: 'A, *, (i), …',
+                            description: 'Optional manual marker for print layout. Leave blank to allow automatic numbering.',
+                            removeWhenEmpty: true
+                        }
+                    ]
+                },
+                {
+                    id: 'exercise-help',
+                    title: 'Authoring Tips',
+                    helpText: 'Include <statement>, <hint>, <solution>, or <answer> children as appropriate so students receive the right support.'
+                }
+            ];
+        }
+    },
+    {
+        type: 'figure',
+        label: 'Figure',
+        description: 'Media wrappers that provide captions for images, videos, and other visualizations.',
+        tags: ['figure'],
+        buildGroups(app, tagName, element) {
+            return [
+                {
+                    id: 'identity',
+                    title: 'Identification',
+                    description: 'Figures need stable IDs and captions for accessibility.',
+                    attributes: [
+                        {
+                            name: 'xml:id',
+                            label: 'XML ID',
+                            defaultValue: app.generateDefaultXmlId(tagName, element),
+                            placeholder: 'fig-identifier',
+                            description: 'Use descriptive IDs (e.g., fig-keplers-laws) to improve cross references.',
+                            removeWhenEmpty: true,
+                            required: true
+                        },
+                        {
+                            name: 'width',
+                            label: 'Width',
+                            placeholder: '60%',
+                            defaultValue: '60%',
+                            description: 'Specify relative width for consistent layouts (e.g., 60% or 320px).',
+                            removeWhenEmpty: true
+                        }
+                    ]
+                },
+                {
+                    id: 'figure-help',
+                    title: 'Authoring Tips',
+                    helpText: 'Wrap media in <image> or <video> children and include a <caption> so the figure is accessible to all readers.'
+                }
+            ];
+        }
+    },
+    {
+        type: 'media',
+        label: 'Media',
+        description: 'Standalone media elements embedded directly in the narrative.',
+        tags: ['image', 'img', 'video', 'audio'],
+        buildGroups(app, tagName, element) {
+            return [
+                {
+                    id: 'source',
+                    title: 'Media Source',
+                    description: 'Provide source information so the resource loads correctly.',
+                    attributes: [
+                        {
+                            name: tagName === 'image' ? 'source' : 'src',
+                            label: 'Source',
+                            placeholder: 'path/to/resource',
+                            description: 'Use project-relative paths where possible to keep media portable.',
+                            removeWhenEmpty: false
+                        },
+                        {
+                            name: 'width',
+                            label: 'Width',
+                            placeholder: '50%',
+                            description: 'Optional width constraint (e.g., 50% or 320px).',
+                            removeWhenEmpty: true
+                        }
+                    ]
+                },
+                {
+                    id: 'media-help',
+                    title: 'Authoring Tips',
+                    helpText: 'Pair media with surrounding prose and captions so that readers understand its context.'
+                }
+            ];
+        }
+    }
+];
+
 const PALETTE_CONFIGURATION = [
     {
         id: 'structure',
@@ -1467,49 +1621,173 @@ class PreTeXtCanvas {
         }
     }
 
-    showElementProperties(element) {
-        const propertiesContent = document.getElementById('properties-content');
-        const tagName = element.tagName.toLowerCase();
-        
-        let propertiesHtml = `
-            <div class="property-group">
-                <h4>Element: ${tagName}</h4>
-                <div class="property-item">
-                    <span class="property-label">Tag:</span>
-                    <span class="property-value">${tagName}</span>
-                </div>
-                <div class="property-item">
-                    <span class="property-label">ID:</span>
-                    <input type="text" class="property-input" value="${element.id || ''}" 
-                           onchange="app.updateElementProperty('id', this.value)">
-                </div>
-                <div class="property-item">
-                    <span class="property-label">Class:</span>
-                    <input type="text" class="property-input" value="${element.className || ''}" 
-                           onchange="app.updateElementProperty('class', this.value)">
-                </div>
-            </div>
-        `;
+    getPretextElementDefinition(tagName) {
+        return PRETEXT_ELEMENT_DEFINITIONS.find((definition) => definition.tags.includes(tagName)) || null;
+    }
 
-        // Add specific properties based on element type
-        if (tagName === 'img') {
-            propertiesHtml += `
-                <div class="property-group">
-                    <h4>Image Properties</h4>
-                    <div class="property-item">
-                        <span class="property-label">Source:</span>
-                        <input type="text" class="property-input" value="${element.src || ''}" 
-                               onchange="app.updateElementProperty('src', this.value)">
-                    </div>
+    generateDefaultXmlId(tagName, element) {
+        const current = element ? element.getAttribute('xml:id') : null;
+        if (current) {
+            return current;
+        }
+
+        const prefixMap = {
+            book: 'book',
+            article: 'article',
+            part: 'part',
+            chapter: 'ch',
+            section: 'sec',
+            subsection: 'subsec',
+            subsubsection: 'subsubsec',
+            appendix: 'app',
+            exercise: 'ex',
+            example: 'ex',
+            problem: 'prob',
+            project: 'proj',
+            activity: 'act',
+            exploration: 'expl',
+            task: 'task',
+            figure: 'fig',
+            image: 'img',
+            img: 'img',
+            video: 'vid',
+            audio: 'aud'
+        };
+
+        const prefix = prefixMap[tagName] || tagName || 'element';
+        return `${prefix}-new`;
+    }
+
+    sanitizePropertyName(name) {
+        return String(name).replace(/[^a-z0-9_-]/gi, '-');
+    }
+
+    buildAttributeFieldHtml(group, attribute, element, context = {}) {
+        const tagName = context.tagName || element.tagName.toLowerCase();
+        const inputId = `property-${group.id}-${this.sanitizePropertyName(attribute.name)}`;
+        const rawValue = attribute.name === 'class'
+            ? element.className
+            : element.getAttribute(attribute.name);
+        const defaultValue = typeof attribute.defaultValue === 'function'
+            ? attribute.defaultValue(tagName, element)
+            : attribute.defaultValue || '';
+        const value = rawValue !== null && rawValue !== undefined
+            ? rawValue
+            : defaultValue;
+        const escapedValue = this.escapeHtml(value || '');
+        const placeholder = attribute.placeholder ? ` placeholder="${this.escapeHtml(attribute.placeholder)}"` : '';
+        const description = attribute.description
+            ? `<p class="property-help">${this.escapeHtml(attribute.description)}</p>`
+            : '';
+        const removeFlag = attribute.removeWhenEmpty ? ' data-remove-when-empty="true"' : '';
+        const required = attribute.required ? ' required' : '';
+
+        if (attribute.readonly) {
+            return `
+                <div class="property-field property-field-readonly">
+                    <span class="property-label">${this.escapeHtml(attribute.label)}</span>
+                    <span class="property-value">${escapedValue}</span>
+                    ${description}
                 </div>
             `;
         }
 
+        return `
+            <div class="property-field">
+                <label class="property-label" for="${inputId}">${this.escapeHtml(attribute.label)}</label>
+                <input id="${inputId}" type="text" class="property-input" value="${escapedValue}"${placeholder}${required}
+                       data-property="${this.escapeHtml(attribute.name)}"${removeFlag}
+                       onchange="app.updateElementProperty('${attribute.name}', this.value, this.dataset)">
+                ${description}
+            </div>
+        `;
+    }
+
+    buildPropertyGroupsHtml(element, tagName) {
+        const definition = this.getPretextElementDefinition(tagName);
+        const groups = [];
+
+        groups.push({
+            id: 'overview',
+            title: 'Element Overview',
+            description: (definition && definition.description) || 'Inspect and adjust common attributes for the selected element.',
+            attributes: [
+                { name: 'tag', label: 'Tag', readonly: true, defaultValue: tagName },
+                { name: 'id', label: 'HTML ID', removeWhenEmpty: true, description: 'Optional ID for styling or scripting in the Canvas.', defaultValue: element.id || '' },
+                { name: 'class', label: 'CSS Classes', removeWhenEmpty: true, description: 'Separate multiple classes with spaces to apply additional styling.', defaultValue: element.className || '' }
+            ]
+        });
+
+        if (definition && typeof definition.buildGroups === 'function') {
+            const typeSpecificGroups = definition.buildGroups(this, tagName, element);
+            if (Array.isArray(typeSpecificGroups)) {
+                groups.push(...typeSpecificGroups);
+            }
+        }
+
+        return groups;
+    }
+
+    showElementProperties(element) {
+        const propertiesContent = document.getElementById('properties-content');
+        if (!propertiesContent) {
+            return;
+        }
+        const tagName = element.tagName.toLowerCase();
+        const definition = this.getPretextElementDefinition(tagName);
+        const groups = this.buildPropertyGroupsHtml(element, tagName);
+        const typeLabel = definition ? definition.label : 'Generic';
+
+        if (propertiesContent) {
+            propertiesContent.setAttribute('aria-busy', 'true');
+        }
+
+        let propertiesHtml = `
+            <div class="properties-header">
+                <div class="properties-header-main">
+                    <h4 class="properties-title">${this.escapeHtml(tagName)}</h4>
+                    <span class="properties-subtitle">${this.escapeHtml(typeLabel)} element</span>
+                </div>
+            </div>
+        `;
+
+        groups.forEach((group) => {
+            const description = group.description
+                ? `<p class="property-group-description">${this.escapeHtml(group.description)}</p>`
+                : '';
+            const helpText = group.helpText
+                ? `<div class="property-group-help">${this.escapeHtml(group.helpText)}</div>`
+                : '';
+
+            const attributesHtml = Array.isArray(group.attributes)
+                ? group.attributes.map((attribute) => this.buildAttributeFieldHtml(group, attribute, element, { tagName })).join('')
+                : '';
+
+            propertiesHtml += `
+                <section class="property-group" aria-labelledby="group-${group.id}">
+                    <div class="property-group-header">
+                        <h5 id="group-${group.id}" class="property-group-title">${this.escapeHtml(group.title)}</h5>
+                        ${description}
+                    </div>
+                    <div class="property-group-body">
+                        ${attributesHtml}
+                        ${helpText}
+                    </div>
+                </section>
+            `;
+        });
+
         propertiesContent.innerHTML = propertiesHtml;
+        propertiesContent.scrollTop = 0;
+        propertiesContent.setAttribute('aria-busy', 'false');
     }
 
     hideElementProperties() {
         const propertiesContent = document.getElementById('properties-content');
+        if (!propertiesContent) {
+            return;
+        }
+        propertiesContent.setAttribute('aria-busy', 'false');
         propertiesContent.innerHTML = '<p class="no-selection">Select an element to view its properties</p>';
     }
 
@@ -1525,13 +1803,43 @@ class PreTeXtCanvas {
         return String(text).replace(/[&<>"']/g, (char) => map[char]);
     }
 
-    updateElementProperty(property, value) {
+    updateElementProperty(property, value, options = {}) {
         if (this.selectedElement) {
+            const isDomStringMap = typeof DOMStringMap !== 'undefined' && options instanceof DOMStringMap;
+            const dataset = isDomStringMap ? options : { ...options };
+            const removeWhenEmpty = dataset.removeWhenEmpty === 'true' || dataset.removeWhenEmpty === true;
+            const trimmedValue = typeof value === 'string' ? value.trim() : value;
+
             if (property === 'class') {
-                this.selectedElement.className = value;
+                if (removeWhenEmpty && trimmedValue === '') {
+                    this.selectedElement.removeAttribute('class');
+                    this.selectedElement.className = '';
+                } else {
+                    this.selectedElement.className = trimmedValue;
+                }
+            } else if (property === 'id') {
+                if (removeWhenEmpty && trimmedValue === '') {
+                    this.selectedElement.removeAttribute('id');
+                    this.selectedElement.id = '';
+                } else {
+                    this.selectedElement.id = trimmedValue;
+                }
             } else {
-                this.selectedElement.setAttribute(property, value);
+                if (removeWhenEmpty && trimmedValue === '') {
+                    this.selectedElement.removeAttribute(property);
+                } else {
+                    this.selectedElement.setAttribute(property, trimmedValue);
+                }
+
+                if (property === 'xml:id') {
+                    if (removeWhenEmpty && trimmedValue === '') {
+                        this.selectedElement.removeAttribute('data-ptx-xml-id');
+                    } else {
+                        this.selectedElement.setAttribute('data-ptx-xml-id', trimmedValue);
+                    }
+                }
             }
+
             this.markDocumentModified();
         }
     }
