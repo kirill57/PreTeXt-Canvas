@@ -178,6 +178,8 @@ const PRETEXT_ELEMENT_DEFINITIONS = [
     }
 ];
 
+const INLINE_INSERTION_TYPES = new Set(['me']);
+
 const PALETTE_CONFIGURATION = [
     {
         id: 'structure',
@@ -561,6 +563,7 @@ class PreTeXtCanvas {
         this.setupLayoutControls();
         this.setupDragAndDrop();
         this.setupTemplateChooser();
+        this.syncToVisual();
         this.generateOutline();
         this.updateStatus('Ready');
 
@@ -1284,13 +1287,29 @@ class PreTeXtCanvas {
         }
 
         const template = this.prepareTemplateForInsertion(elementType, rawTemplate);
+        const visualContent = document.getElementById('visual-content');
+        const sourceContent = document.getElementById('source-content');
+        const activeElement = document.activeElement;
+        const visualHasFocus = visualContent && (visualContent === activeElement || visualContent.contains(activeElement));
+        const sourceHasFocus = sourceContent && sourceContent === activeElement;
 
-        if (this.currentView === 'visual' || this.currentView === 'split') {
-            this.insertIntoVisualEditor(elementType, template);
-        }
+        const shouldInsertIntoVisual = this.currentView === 'visual'
+            || (this.currentView === 'split' && (!sourceHasFocus || visualHasFocus));
+        const shouldInsertIntoSource = this.currentView === 'source'
+            || (this.currentView === 'split' && sourceHasFocus);
 
-        if (this.currentView === 'source' || this.currentView === 'split') {
-            this.insertIntoSourceEditor(template);
+        const insertedVisual = shouldInsertIntoVisual
+            ? Boolean(this.insertIntoVisualEditor(elementType, template))
+            : false;
+
+        const insertedSource = shouldInsertIntoSource
+            ? this.insertIntoSourceEditor(template)
+            : false;
+
+        if (insertedSource) {
+            this.syncToVisual();
+        } else if (insertedVisual) {
+            this.syncToSource();
         }
 
         this.markDocumentModified();
@@ -1301,28 +1320,96 @@ class PreTeXtCanvas {
 
     insertIntoVisualEditor(elementType, template) {
         const visualContent = document.getElementById('visual-content');
+        if (!visualContent) {
+            return null;
+        }
+
         const selection = window.getSelection();
-        
+        if (!selection) {
+            return null;
+        }
+
+        let range = null;
+
         if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = this.xmlToHtml(template);
-            
-            range.deleteContents();
-            range.insertNode(tempDiv.firstChild);
-            
-            // Position cursor at the end of inserted content
-            range.setStartAfter(tempDiv.firstChild);
+            const candidate = selection.getRangeAt(0);
+            if (visualContent.contains(candidate.commonAncestorContainer)) {
+                range = candidate;
+            }
+        }
+
+        if (!range) {
+            visualContent.focus();
+            range = document.createRange();
+            const fallbackTarget = (this.selectedElement && visualContent.contains(this.selectedElement))
+                ? this.selectedElement
+                : (visualContent.lastChild || visualContent);
+            if (fallbackTarget.nodeType === Node.ELEMENT_NODE) {
+                range.selectNodeContents(fallbackTarget);
+                range.collapse(false);
+            } else {
+                range.selectNodeContents(visualContent);
+                range.collapse(false);
+            }
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        if (!INLINE_INSERTION_TYPES.has(elementType) && range.startContainer) {
+            const adjustTarget = range.startContainer.nodeType === Node.TEXT_NODE
+                ? range.startContainer.parentElement
+                : range.startContainer;
+
+            if (adjustTarget && adjustTarget.nodeType === Node.ELEMENT_NODE && visualContent.contains(adjustTarget)) {
+                const blockTarget = adjustTarget.closest('p, section, subsection, chapter, book, article, div, ol, ul, li, figure, example, exercise');
+                if (blockTarget && blockTarget !== visualContent) {
+                    range.setStartAfter(blockTarget);
+                    range.collapse(true);
+                }
+            }
+        }
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = this.xmlToHtml(template);
+
+        if (!tempDiv.firstChild) {
+            return null;
+        }
+
+        const fragment = document.createDocumentFragment();
+        let lastInserted = null;
+        let firstInsertedElement = null;
+        while (tempDiv.firstChild) {
+            lastInserted = tempDiv.firstChild;
+            if (!firstInsertedElement && lastInserted.nodeType === Node.ELEMENT_NODE) {
+                firstInsertedElement = lastInserted;
+            }
+            fragment.appendChild(lastInserted);
+        }
+
+        range.deleteContents();
+        range.insertNode(fragment);
+
+        if (lastInserted) {
+            range.setStartAfter(lastInserted);
             range.collapse(true);
             selection.removeAllRanges();
             selection.addRange(range);
         }
-        
+
         this.renderMath();
+        if (firstInsertedElement) {
+            this.selectElement(firstInsertedElement);
+        }
+        return lastInserted;
     }
 
     insertIntoSourceEditor(template) {
         const sourceContent = document.getElementById('source-content');
+        if (!sourceContent) {
+            return false;
+        }
+
         const start = sourceContent.selectionStart;
         const end = sourceContent.selectionEnd;
         const text = sourceContent.value;
@@ -1331,7 +1418,7 @@ class PreTeXtCanvas {
         sourceContent.selectionStart = sourceContent.selectionEnd = start + template.length + 2;
         sourceContent.focus();
         this.invalidateSourceLocationMap();
-        this.syncSourceSelectionToVisual();
+        return true;
     }
 
     xmlToHtml(xml) {
@@ -1370,7 +1457,7 @@ class PreTeXtCanvas {
 
         // Convert inline math (<me>) to visual containers
         container.querySelectorAll('me').forEach((meEl) => {
-            const wrapper = document.createElement('div');
+            const wrapper = document.createElement('span');
             wrapper.className = 'math-expression';
             const originalContent = meEl.innerHTML;
             wrapper.dataset.pretext = originalContent;
@@ -1471,6 +1558,69 @@ class PreTeXtCanvas {
         const rootCounts = new Map();
         Array.from(container.children).forEach((child) => {
             traverse(child, '', rootCounts);
+        });
+    }
+
+    prepareVisualContentForSync() {
+        const visualContent = document.getElementById('visual-content');
+        if (!visualContent) {
+            return;
+        }
+
+        this.normalizeVisualDocument(visualContent);
+        this.assignPretextPaths(visualContent);
+    }
+
+    normalizeVisualDocument(root) {
+        if (!root) {
+            return;
+        }
+
+        const inlineTags = new Set([
+            'a', 'span', 'em', 'strong', 'code', 'kbd', 'mark', 'sub', 'sup',
+            'small', 'b', 'i', 'u', 's', 'del', 'ins'
+        ]);
+
+        const candidates = Array.from(root.querySelectorAll('div'));
+        candidates.forEach((div) => {
+            if (div === root) {
+                return;
+            }
+
+            if (div.classList.contains('pretext-document') || div.classList.contains('math-display')) {
+                return;
+            }
+
+            if (div.dataset && div.dataset.ptxPath) {
+                return;
+            }
+
+            const hasBlockChildren = Array.from(div.children).some((child) => {
+                if (!child.tagName) {
+                    return false;
+                }
+
+                const tag = child.tagName.toLowerCase();
+                if (tag === 'br') {
+                    return false;
+                }
+
+                if (inlineTags.has(tag)) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            if (hasBlockChildren) {
+                return;
+            }
+
+            const paragraph = document.createElement('p');
+            while (div.firstChild) {
+                paragraph.appendChild(div.firstChild);
+            }
+            div.replaceWith(paragraph);
         });
     }
 
@@ -1625,7 +1775,213 @@ class PreTeXtCanvas {
         return best ? best.path : null;
     }
 
-    scrollSourceToIndex(sourceContent, index, endIndex = index) {
+    computePretextPath(element) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+            return null;
+        }
+
+        if (element.dataset && element.dataset.ptxPath) {
+            return element.dataset.ptxPath;
+        }
+
+        const visualContent = document.getElementById('visual-content');
+        const segments = [];
+        let current = element;
+
+        while (current && current !== visualContent) {
+            if (current.dataset && current.dataset.ptxPath) {
+                const basePath = current.dataset.ptxPath;
+                if (!segments.length) {
+                    return basePath;
+                }
+                return `${basePath}/${segments.join('/')}`;
+            }
+
+            const tagName = current.tagName ? current.tagName.toLowerCase() : '';
+            if (!tagName) {
+                return null;
+            }
+
+            let occurrence = 0;
+            let sibling = current;
+            while (sibling) {
+                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName.toLowerCase() === tagName) {
+                    occurrence += 1;
+                }
+                if (sibling === current) {
+                    break;
+                }
+                sibling = sibling.previousElementSibling;
+            }
+
+            const index = occurrence > 0 ? occurrence : 1;
+            segments.unshift(`${tagName}[${index}]`);
+            current = current.parentElement;
+        }
+
+        return segments.length ? segments.join('/') : null;
+    }
+
+    getCandidatePaths(element) {
+        if (!element) {
+            return [];
+        }
+
+        const candidates = [];
+
+        const computed = this.computePretextPath(element);
+        if (computed) {
+            candidates.push(computed);
+        }
+
+        if (element.dataset && element.dataset.ptxPath && !candidates.includes(element.dataset.ptxPath)) {
+            candidates.push(element.dataset.ptxPath);
+        }
+
+        return candidates;
+    }
+
+    measureTextOffsetWithinElement(container, node, offset) {
+        if (!container || !node) {
+            return null;
+        }
+
+        try {
+            const range = document.createRange();
+            range.selectNodeContents(container);
+            range.setEnd(node, offset);
+            return range.toString().length;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    skipLeadingWhitespaceOutsideTags(text, index, end) {
+        let position = index;
+        while (position < end) {
+            const char = text[position];
+            if (char === '<') {
+                const close = text.indexOf('>', position);
+                if (close === -1) {
+                    return position;
+                }
+                position = close + 1;
+                continue;
+            }
+
+            if (!/\s/.test(char)) {
+                break;
+            }
+
+            position += 1;
+        }
+
+        return position;
+    }
+
+    mapTextOffsetToSourceIndex(sourceText, location, textOffset) {
+        if (!sourceText || !location) {
+            return null;
+        }
+
+        const start = Math.max(0, location.start ?? 0);
+        const end = Math.max(start, location.end ?? start);
+
+        if (start >= sourceText.length) {
+            return sourceText.length;
+        }
+
+        let index = start;
+        const openingEnd = sourceText.indexOf('>', index);
+        if (openingEnd !== -1 && openingEnd < end) {
+            index = openingEnd + 1;
+        }
+
+        index = this.skipLeadingWhitespaceOutsideTags(sourceText, index, end);
+
+        if (textOffset <= 0) {
+            return index;
+        }
+
+        let remaining = textOffset;
+        let lastIndex = index;
+
+        while (index < end) {
+            const char = sourceText[index];
+
+            if (char === '<') {
+                const close = sourceText.indexOf('>', index);
+                if (close === -1) {
+                    break;
+                }
+                index = close + 1;
+                lastIndex = index;
+                continue;
+            }
+
+            if (char === '&') {
+                const semicolon = sourceText.indexOf(';', index);
+                if (semicolon === -1) {
+                    index += 1;
+                } else {
+                    index = semicolon + 1;
+                }
+                remaining -= 1;
+                lastIndex = index;
+                if (remaining <= 0) {
+                    return lastIndex;
+                }
+                continue;
+            }
+
+            index += 1;
+            remaining -= 1;
+            lastIndex = index;
+
+            if (remaining <= 0) {
+                return lastIndex;
+            }
+        }
+
+        return Math.min(lastIndex, end);
+    }
+
+    computeSourceSelectionForVisual(element, location, sourceText) {
+        if (!element || !location) {
+            return null;
+        }
+
+        const selection = window.getSelection ? window.getSelection() : null;
+        if (!selection || selection.rangeCount === 0) {
+            return null;
+        }
+
+        const range = selection.getRangeAt(0);
+        if (!element.contains(range.startContainer) || !element.contains(range.endContainer)) {
+            return null;
+        }
+
+        const startOffset = this.measureTextOffsetWithinElement(element, range.startContainer, range.startOffset);
+        const endOffset = this.measureTextOffsetWithinElement(element, range.endContainer, range.endOffset);
+
+        if (startOffset == null || endOffset == null) {
+            return null;
+        }
+
+        const startIndex = this.mapTextOffsetToSourceIndex(sourceText, location, startOffset);
+        const endIndex = this.mapTextOffsetToSourceIndex(sourceText, location, endOffset);
+
+        if (startIndex == null || endIndex == null) {
+            return null;
+        }
+
+        return {
+            start: Math.min(startIndex, endIndex),
+            end: Math.max(startIndex, endIndex)
+        };
+    }
+
+    scrollSourceToIndex(sourceContent, index, endIndex = index, options = {}) {
         if (!sourceContent) {
             return;
         }
@@ -1633,12 +1989,13 @@ class PreTeXtCanvas {
         const value = sourceContent.value;
         const clampedStart = Math.max(0, Math.min(index, value.length));
         const clampedEnd = Math.max(clampedStart, Math.min(endIndex, value.length));
+        const collapseSelection = Boolean(options.collapseSelection);
         const before = value.slice(0, clampedStart);
         const beforeLines = before.split(/\r?\n/).length;
         const totalLines = value.length ? value.split(/\r?\n/).length : 1;
 
         sourceContent.selectionStart = clampedStart;
-        sourceContent.selectionEnd = clampedEnd;
+        sourceContent.selectionEnd = collapseSelection ? clampedStart : clampedEnd;
 
         const denominator = Math.max(totalLines - 1, 1);
         const ratio = (beforeLines - 1) / denominator;
@@ -1746,41 +2103,77 @@ class PreTeXtCanvas {
             return;
         }
 
-        const targetElement = element ? this.findElementWithPath(element) : this.getVisualSelectionElement();
-        if (!targetElement) {
+        let rawTarget = element || null;
+        if (!rawTarget) {
+            const selection = window.getSelection ? window.getSelection() : null;
+            if (selection && selection.rangeCount > 0) {
+                rawTarget = selection.focusNode || selection.anchorNode || null;
+            }
+        }
+
+        if (!rawTarget) {
+            rawTarget = this.getVisualSelectionElement();
+        }
+
+        if (!rawTarget) {
             return;
         }
 
+        const targetElement = rawTarget.nodeType === Node.ELEMENT_NODE
+            ? rawTarget
+            : rawTarget.parentElement;
+
+        if (!targetElement) {
+            return;
+        }
         let current = targetElement;
         let location = null;
+        let locationElement = null;
 
         while (current && !location) {
-            const path = current.dataset ? current.dataset.ptxPath : null;
-            if (path) {
-                location = this.getSourceLocationForPath(path);
+            const candidatePaths = this.getCandidatePaths(current);
+            for (const candidate of candidatePaths) {
+                const resolvedLocation = this.getSourceLocationForPath(candidate);
+                if (resolvedLocation) {
+                    location = resolvedLocation;
+                    locationElement = current;
+                    if (current.dataset && !current.dataset.ptxPath) {
+                        current.dataset.ptxPath = candidate;
+                    }
+                    break;
+                }
             }
 
             if (!location) {
-                location = this.findLocationById(current);
+                const idLocation = this.findLocationById(current);
+                if (idLocation) {
+                    location = idLocation;
+                    locationElement = current;
+                    break;
+                }
             }
 
-            if (!location) {
-                current = this.findElementWithPath(current.parentElement);
-            }
+            current = current.parentElement;
         }
 
-        if (!location) {
+        if (!location || !locationElement) {
             return;
         }
 
         const documentLength = sourceContent.value.length;
-        const startIndex = Math.max(0, Math.min(location.start ?? 0, documentLength));
+        let startIndex = Math.max(0, Math.min(location.start ?? 0, documentLength));
         const endIndexCandidate = typeof location.end === 'number' ? location.end : location.start;
-        const endIndex = Math.max(startIndex, Math.min(endIndexCandidate ?? startIndex, documentLength));
+        let endIndex = Math.max(startIndex, Math.min(endIndexCandidate ?? startIndex, documentLength));
+
+        const refined = this.computeSourceSelectionForVisual(locationElement, location, sourceContent.value);
+        if (refined) {
+            startIndex = Math.max(0, Math.min(refined.start, documentLength));
+            endIndex = Math.max(startIndex, Math.min(refined.end, documentLength));
+        }
 
         this.isSyncingSelection = true;
         try {
-            this.scrollSourceToIndex(sourceContent, startIndex, endIndex);
+            this.scrollSourceToIndex(sourceContent, startIndex, endIndex, { collapseSelection: true });
             if (typeof sourceContent.focus === 'function') {
                 try {
                     sourceContent.focus({ preventScroll: true });
@@ -1832,6 +2225,7 @@ class PreTeXtCanvas {
             return;
         }
 
+        this.prepareVisualContentForSync();
         this.markDocumentModified();
         this.syncToSource();
         this.generateOutline();
@@ -1963,6 +2357,13 @@ class PreTeXtCanvas {
             el.removeAttribute('data-ptx-xml-id');
         });
 
+        container.querySelectorAll('.element-selected').forEach((el) => {
+            el.classList.remove('element-selected');
+            if (!el.className || !el.className.trim()) {
+                el.removeAttribute('class');
+            }
+        });
+
         return container.innerHTML;
     }
 
@@ -1970,6 +2371,9 @@ class PreTeXtCanvas {
         // Remove previous selection
         document.querySelectorAll('.element-selected').forEach(el => {
             el.classList.remove('element-selected');
+            if (!el.classList.length) {
+                el.removeAttribute('class');
+            }
         });
 
         // Add selection to clicked element
