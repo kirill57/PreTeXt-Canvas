@@ -15,7 +15,13 @@ class PreTeXtCanvas {
         };
         this.activeResizer = null;
         this.layoutControlsInitialized = false;
-        
+        this.undoStack = [];
+        this.redoStack = [];
+        this.lastSnapshot = null;
+        this.isApplyingHistory = false;
+        this.historyDebounceTimer = null;
+        this.historyDebounceDelay = 400;
+
         this.init();
     }
 
@@ -30,6 +36,8 @@ class PreTeXtCanvas {
         if (window.MathJax && window.MathJax.typesetPromise) {
             this.renderMath();
         }
+
+        this.recordHistorySnapshot(true);
     }
 
     setupEventListeners() {
@@ -43,6 +51,10 @@ class PreTeXtCanvas {
         document.getElementById('open-file').addEventListener('click', () => this.openFile());
         document.getElementById('save-file').addEventListener('click', () => this.saveFile());
         document.getElementById('file-input').addEventListener('change', (e) => this.handleFileLoad(e));
+
+        // Edit controls
+        document.getElementById('undo-action').addEventListener('click', () => this.undo());
+        document.getElementById('redo-action').addEventListener('click', () => this.redo());
 
         // Panel switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -360,6 +372,7 @@ class PreTeXtCanvas {
         }
 
         this.markDocumentModified();
+        this.recordHistorySnapshot(true);
         this.generateOutline();
         this.validateDocument();
     }
@@ -473,18 +486,28 @@ class PreTeXtCanvas {
     }
 
     onVisualEdit() {
+        if (this.isApplyingHistory) {
+            return;
+        }
+
         this.markDocumentModified();
         this.syncToSource();
         this.generateOutline();
         this.validateDocument();
         this.renderMath();
+        this.scheduleHistorySnapshot();
     }
 
     onSourceEdit() {
+        if (this.isApplyingHistory) {
+            return;
+        }
+
         this.markDocumentModified();
         this.syncToVisual();
         this.generateOutline();
         this.validateDocument();
+        this.scheduleHistorySnapshot();
     }
 
     syncToSource() {
@@ -898,6 +921,7 @@ class PreTeXtCanvas {
         this.generateOutline();
         this.validateDocument();
         this.updateStatus('New document created');
+        this.recordHistorySnapshot(true);
     }
 
     openFile() {
@@ -922,6 +946,7 @@ class PreTeXtCanvas {
             this.validateDocument();
             this.renderMath();
             this.updateStatus(`Loaded: ${file.name}`);
+            this.recordHistorySnapshot(true);
         };
         reader.readAsText(file);
         
@@ -941,9 +966,15 @@ class PreTeXtCanvas {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         this.isDocumentModified = false;
         this.updateStatus('Document saved');
+
+        if (this.undoStack.length > 0) {
+            const topSnapshot = this.undoStack[this.undoStack.length - 1];
+            topSnapshot.isDocumentModified = false;
+            this.lastSnapshot = topSnapshot;
+        }
     }
 
     setupDragAndDrop() {
@@ -974,7 +1005,8 @@ class PreTeXtCanvas {
 
     handleKeyboardShortcuts(event) {
         if (event.ctrlKey || event.metaKey) {
-            switch (event.key) {
+            const key = event.key.toLowerCase();
+            switch (key) {
                 case 'n':
                     event.preventDefault();
                     this.newDocument();
@@ -998,6 +1030,18 @@ class PreTeXtCanvas {
                 case '3':
                     event.preventDefault();
                     this.switchView('split');
+                    break;
+                case 'z':
+                    event.preventDefault();
+                    if (event.shiftKey) {
+                        this.redo();
+                    } else {
+                        this.undo();
+                    }
+                    break;
+                case 'y':
+                    event.preventDefault();
+                    this.redo();
                     break;
             }
         }
@@ -1060,6 +1104,126 @@ class PreTeXtCanvas {
         }
 
         cursorPositionEl.textContent = 'Line –, Column –';
+    }
+
+    createSnapshot() {
+        const sourceContent = document.getElementById('source-content');
+        const visualContent = document.getElementById('visual-content');
+
+        return {
+            source: sourceContent ? sourceContent.value : '',
+            visual: visualContent ? visualContent.innerHTML : '',
+            isDocumentModified: this.isDocumentModified
+        };
+    }
+
+    snapshotsEqual(a, b) {
+        if (!a || !b) {
+            return false;
+        }
+        return a.source === b.source && a.visual === b.visual;
+    }
+
+    recordHistorySnapshot(force = false) {
+        if (this.isApplyingHistory) {
+            return;
+        }
+
+        if (this.historyDebounceTimer) {
+            clearTimeout(this.historyDebounceTimer);
+            this.historyDebounceTimer = null;
+        }
+
+        const snapshot = this.createSnapshot();
+
+        if (!this.undoStack.length) {
+            this.undoStack.push(snapshot);
+            this.lastSnapshot = snapshot;
+            this.redoStack = [];
+            return;
+        }
+
+        if (!force && this.lastSnapshot && this.snapshotsEqual(snapshot, this.lastSnapshot)) {
+            return;
+        }
+
+        this.undoStack.push(snapshot);
+        this.lastSnapshot = snapshot;
+        this.redoStack = [];
+    }
+
+    scheduleHistorySnapshot() {
+        if (this.isApplyingHistory) {
+            return;
+        }
+
+        if (this.historyDebounceTimer) {
+            clearTimeout(this.historyDebounceTimer);
+        }
+
+        this.historyDebounceTimer = setTimeout(() => {
+            this.recordHistorySnapshot();
+            this.historyDebounceTimer = null;
+        }, this.historyDebounceDelay);
+    }
+
+    applySnapshot(snapshot) {
+        if (!snapshot) {
+            return;
+        }
+
+        const sourceContent = document.getElementById('source-content');
+        const visualContent = document.getElementById('visual-content');
+
+        if (this.historyDebounceTimer) {
+            clearTimeout(this.historyDebounceTimer);
+            this.historyDebounceTimer = null;
+        }
+
+        this.isApplyingHistory = true;
+
+        if (sourceContent) {
+            sourceContent.value = snapshot.source;
+        }
+
+        if (visualContent) {
+            visualContent.innerHTML = snapshot.visual;
+        }
+
+        this.isDocumentModified = snapshot.isDocumentModified;
+        this.lastSnapshot = snapshot;
+
+        this.generateOutline();
+        this.validateDocument();
+        this.renderMath();
+
+        this.isApplyingHistory = false;
+    }
+
+    undo() {
+        if (this.undoStack.length <= 1) {
+            this.updateStatus('Nothing to undo');
+            return;
+        }
+
+        const currentSnapshot = this.undoStack.pop();
+        this.redoStack.push(currentSnapshot);
+
+        const previousSnapshot = this.undoStack[this.undoStack.length - 1];
+        this.applySnapshot(previousSnapshot);
+        this.updateStatus('Undo');
+    }
+
+    redo() {
+        if (this.redoStack.length === 0) {
+            this.updateStatus('Nothing to redo');
+            return;
+        }
+
+        const snapshot = this.redoStack.pop();
+        this.undoStack.push(snapshot);
+        this.applySnapshot(snapshot);
+        this.updateStatus('Redo');
     }
 
     markDocumentModified() {
