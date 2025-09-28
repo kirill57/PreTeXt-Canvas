@@ -420,8 +420,32 @@ class PreTeXtCanvas {
             wrapper.className = 'math-display';
             const originalContent = mdEl.innerHTML;
             wrapper.dataset.pretext = originalContent;
+            const normalizeLine = (text) => (text || '').replace(/\s+/g, ' ').trim();
+            const mrows = Array.from(mdEl.querySelectorAll('mrow'));
+            let latexBody = '';
+
+            if (mrows.length > 0) {
+                const lines = mrows
+                    .map((row) => normalizeLine(row.textContent))
+                    .filter((line) => line.length > 0);
+
+                if (lines.length > 0) {
+                    const joined = lines.join(' \\\n');
+                    const requiresAlignment = lines.some((line) => line.includes('&'));
+                    latexBody = requiresAlignment
+                        ? `\\begin{aligned}\n${joined}\n\\end{aligned}`
+                        : joined;
+                }
+            }
+
+            if (!latexBody) {
+                latexBody = normalizeLine(mdEl.textContent);
+            }
+
             wrapper.append(document.createTextNode('\\['));
-            wrapper.append(document.createTextNode(mdEl.textContent || ''));
+            if (latexBody) {
+                wrapper.append(document.createTextNode(latexBody));
+            }
             wrapper.append(document.createTextNode('\\]'));
             mdEl.replaceWith(wrapper);
         });
