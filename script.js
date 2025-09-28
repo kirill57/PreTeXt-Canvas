@@ -21,6 +21,8 @@ class PreTeXtCanvas {
         this.isApplyingHistory = false;
         this.historyDebounceTimer = null;
         this.historyDebounceDelay = 400;
+        this.sourceLocationCache = null;
+        this.isSyncingSelection = false;
 
         this.init();
     }
@@ -70,19 +72,36 @@ class PreTeXtCanvas {
         const visualContent = document.getElementById('visual-content');
         visualContent.addEventListener('input', () => this.onVisualEdit());
         visualContent.addEventListener('click', (e) => {
-            this.selectElement(e.target);
+            const resolved = this.findElementWithPath(e.target) || e.target;
+            this.selectElement(resolved);
             this.updateCursorPosition();
+            this.syncSelectionFromVisual(resolved);
         });
-        visualContent.addEventListener('mouseup', () => this.updateCursorPosition());
-        visualContent.addEventListener('keyup', () => this.updateCursorPosition());
+        visualContent.addEventListener('mouseup', () => {
+            this.updateCursorPosition();
+            this.syncSelectionFromVisual();
+        });
+        visualContent.addEventListener('keyup', () => {
+            this.updateCursorPosition();
+            this.syncSelectionFromVisual();
+        });
 
         // Source editor events
         const sourceContent = document.getElementById('source-content');
         sourceContent.addEventListener('input', () => this.onSourceEdit());
         sourceContent.addEventListener('scroll', () => this.syncScroll());
-        sourceContent.addEventListener('click', () => this.updateCursorPosition());
-        sourceContent.addEventListener('mouseup', () => this.updateCursorPosition());
-        sourceContent.addEventListener('keyup', () => this.updateCursorPosition());
+        sourceContent.addEventListener('click', () => {
+            this.updateCursorPosition();
+            this.syncSourceSelectionToVisual();
+        });
+        sourceContent.addEventListener('mouseup', () => {
+            this.updateCursorPosition();
+            this.syncSourceSelectionToVisual();
+        });
+        sourceContent.addEventListener('keyup', () => {
+            this.updateCursorPosition();
+            this.syncSourceSelectionToVisual();
+        });
 
         // Outline navigation
         document.addEventListener('click', (e) => {
@@ -404,10 +423,12 @@ class PreTeXtCanvas {
         const start = sourceContent.selectionStart;
         const end = sourceContent.selectionEnd;
         const text = sourceContent.value;
-        
+
         sourceContent.value = text.substring(0, start) + '\n' + template + '\n' + text.substring(end);
         sourceContent.selectionStart = sourceContent.selectionEnd = start + template.length + 2;
         sourceContent.focus();
+        this.invalidateSourceLocationMap();
+        this.syncSourceSelectionToVisual();
     }
 
     xmlToHtml(xml) {
@@ -415,10 +436,20 @@ class PreTeXtCanvas {
         const container = document.createElement('div');
         container.innerHTML = xml;
 
+        this.assignPretextPaths(container);
+
         // Convert titles to headings
         container.querySelectorAll('title').forEach((titleEl) => {
             const heading = document.createElement('h2');
             heading.innerHTML = titleEl.innerHTML;
+            const path = titleEl.getAttribute('data-ptx-path');
+            if (path) {
+                heading.setAttribute('data-ptx-path', path);
+            }
+            const xmlId = titleEl.getAttribute('data-ptx-xml-id') || titleEl.getAttribute('xml:id');
+            if (xmlId) {
+                heading.setAttribute('data-ptx-xml-id', xmlId);
+            }
             titleEl.replaceWith(heading);
         });
 
@@ -440,6 +471,14 @@ class PreTeXtCanvas {
             wrapper.className = 'math-expression';
             const originalContent = meEl.innerHTML;
             wrapper.dataset.pretext = originalContent;
+            const path = meEl.getAttribute('data-ptx-path');
+            if (path) {
+                wrapper.setAttribute('data-ptx-path', path);
+            }
+            const xmlId = meEl.getAttribute('data-ptx-xml-id') || meEl.getAttribute('xml:id');
+            if (xmlId) {
+                wrapper.setAttribute('data-ptx-xml-id', xmlId);
+            }
             wrapper.append(document.createTextNode('\\('));
             wrapper.append(document.createTextNode(meEl.textContent || ''));
             wrapper.append(document.createTextNode('\\)'));
@@ -452,6 +491,14 @@ class PreTeXtCanvas {
             wrapper.className = 'math-display';
             const originalContent = mdEl.innerHTML;
             wrapper.dataset.pretext = originalContent;
+            const path = mdEl.getAttribute('data-ptx-path');
+            if (path) {
+                wrapper.setAttribute('data-ptx-path', path);
+            }
+            const xmlId = mdEl.getAttribute('data-ptx-xml-id') || mdEl.getAttribute('xml:id');
+            if (xmlId) {
+                wrapper.setAttribute('data-ptx-xml-id', xmlId);
+            }
             const normalizeLine = (text) => (text || '').replace(/\s+/g, ' ').trim();
             const mrows = Array.from(mdEl.querySelectorAll('mrow'));
             let latexBody = '';
@@ -485,6 +532,384 @@ class PreTeXtCanvas {
         return container.innerHTML;
     }
 
+    assignPretextPaths(container) {
+        if (!container) {
+            return;
+        }
+
+        const traverse = (element, parentPath, siblingCounts) => {
+            if (!element || element.nodeType !== 1) {
+                return;
+            }
+
+            const tagName = element.tagName ? element.tagName.toLowerCase() : '';
+            if (!tagName) {
+                return;
+            }
+
+            const counts = siblingCounts;
+            const currentCount = (counts.get(tagName) || 0) + 1;
+            counts.set(tagName, currentCount);
+
+            const path = parentPath ? `${parentPath}/${tagName}[${currentCount}]` : `${tagName}[${currentCount}]`;
+            element.setAttribute('data-ptx-path', path);
+
+            const xmlId = element.getAttribute('xml:id');
+            if (xmlId) {
+                element.setAttribute('data-ptx-xml-id', xmlId);
+            }
+
+            const childCounts = new Map();
+            Array.from(element.children).forEach((child) => {
+                traverse(child, path, childCounts);
+            });
+        };
+
+        const rootCounts = new Map();
+        Array.from(container.children).forEach((child) => {
+            traverse(child, '', rootCounts);
+        });
+    }
+
+    invalidateSourceLocationMap() {
+        this.sourceLocationCache = null;
+    }
+
+    getSourceLocationCache() {
+        const sourceContent = document.getElementById('source-content');
+        if (!sourceContent) {
+            return null;
+        }
+
+        const text = sourceContent.value;
+        if (this.sourceLocationCache && this.sourceLocationCache.text === text) {
+            return this.sourceLocationCache;
+        }
+
+        this.sourceLocationCache = this.buildSourceLocationCache(text);
+        return this.sourceLocationCache;
+    }
+
+    buildSourceLocationCache(text) {
+        const locations = [];
+        const map = new Map();
+        const stack = [];
+        const rootCounts = new Map();
+        const tokenRegex = /<[^>]+>/g;
+
+        const addLocation = (entry) => {
+            const location = {
+                path: entry.path,
+                start: entry.start,
+                end: entry.end
+            };
+            locations.push(location);
+            map.set(entry.path, location);
+        };
+
+        let match;
+        while ((match = tokenRegex.exec(text)) !== null) {
+            const token = match[0];
+
+            if (token.startsWith('<?') || token.startsWith('<!')) {
+                continue;
+            }
+
+            const isClosing = token.startsWith('</');
+            const isSelfClosing = /\/>$/.test(token);
+            const tagMatch = /^<\/?\s*([^\s/>]+)/.exec(token);
+            if (!tagMatch) {
+                continue;
+            }
+
+            const tagName = tagMatch[1].toLowerCase();
+
+            if (isClosing) {
+                for (let i = stack.length - 1; i >= 0; i--) {
+                    const entry = stack[i];
+                    if (entry.tagName === tagName) {
+                        entry.end = match.index + token.length;
+                        addLocation(entry);
+                        stack.splice(i, 1);
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            const parent = stack[stack.length - 1];
+            const counts = parent ? parent.childCounts : rootCounts;
+            const currentCount = (counts.get(tagName) || 0) + 1;
+            counts.set(tagName, currentCount);
+
+            const path = parent ? `${parent.path}/${tagName}[${currentCount}]` : `${tagName}[${currentCount}]`;
+
+            const entry = {
+                tagName,
+                path,
+                start: match.index,
+                end: match.index + token.length,
+                childCounts: new Map()
+            };
+
+            if (isSelfClosing) {
+                addLocation(entry);
+            } else {
+                stack.push(entry);
+            }
+        }
+
+        const textLength = text.length;
+        while (stack.length > 0) {
+            const entry = stack.pop();
+            entry.end = textLength;
+            addLocation(entry);
+        }
+
+        return { text, locations, map };
+    }
+
+    getSourceLocationForPath(path) {
+        if (!path) {
+            return null;
+        }
+
+        const cache = this.getSourceLocationCache();
+        if (!cache) {
+            return null;
+        }
+
+        return cache.map.get(path) || null;
+    }
+
+    getSourcePathAtOffset(offset) {
+        const cache = this.getSourceLocationCache();
+        if (!cache) {
+            return null;
+        }
+
+        let best = null;
+        let forward = null;
+        for (const location of cache.locations) {
+            if (location.start <= offset && offset <= location.end) {
+                if (!best) {
+                    best = location;
+                    continue;
+                }
+
+                const currentRange = location.end - location.start;
+                const bestRange = best.end - best.start;
+                if (currentRange <= bestRange) {
+                    best = location;
+                }
+            }
+
+            if (location.start > offset) {
+                if (!forward || location.start < forward.start) {
+                    forward = location;
+                }
+            }
+        }
+
+        if (!best && forward) {
+            return forward.path;
+        }
+
+        if (!best && offset > 0) {
+            return this.getSourcePathAtOffset(offset - 1);
+        }
+
+        return best ? best.path : null;
+    }
+
+    scrollSourceToIndex(sourceContent, index) {
+        if (!sourceContent) {
+            return;
+        }
+
+        const value = sourceContent.value;
+        const before = value.slice(0, index);
+        const beforeLines = before.split(/\r?\n/).length;
+        const totalLines = value.length ? value.split(/\r?\n/).length : 1;
+
+        sourceContent.selectionStart = index;
+        sourceContent.selectionEnd = index;
+
+        const denominator = Math.max(totalLines - 1, 1);
+        const ratio = (beforeLines - 1) / denominator;
+        const maxScroll = sourceContent.scrollHeight - sourceContent.clientHeight;
+        const clampedRatio = Math.min(Math.max(ratio, 0), 1);
+        sourceContent.scrollTop = Math.max(0, clampedRatio * maxScroll);
+    }
+
+    escapeForAttributeSelector(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(value);
+        }
+
+        return String(value).replace(/(["\\\[\]\/:])/g, '\\$1');
+    }
+
+    findVisualElementByPath(path) {
+        if (!path) {
+            return null;
+        }
+
+        const visualContent = document.getElementById('visual-content');
+        if (!visualContent) {
+            return null;
+        }
+
+        const escaped = this.escapeForAttributeSelector(path);
+        return visualContent.querySelector(`[data-ptx-path="${escaped}"]`);
+    }
+
+    findElementWithPath(node) {
+        if (!node) {
+            return null;
+        }
+
+        const visualContent = document.getElementById('visual-content');
+        let current = node.nodeType === 1 ? node : node.parentElement;
+
+        while (current && current !== visualContent) {
+            if (current.dataset && current.dataset.ptxPath) {
+                return current;
+            }
+            current = current.parentElement;
+        }
+
+        return null;
+    }
+
+    getVisualSelectionElement() {
+        const selection = window.getSelection ? window.getSelection() : null;
+        const visualContent = document.getElementById('visual-content');
+
+        if (!selection || !visualContent || selection.rangeCount === 0) {
+            return this.selectedElement || null;
+        }
+
+        const focusNode = selection.focusNode || selection.anchorNode;
+        if (!focusNode) {
+            return this.selectedElement || null;
+        }
+
+        return this.findElementWithPath(focusNode) || this.selectedElement || null;
+    }
+
+    findLocationById(element) {
+        if (!element) {
+            return null;
+        }
+
+        const sourceContent = document.getElementById('source-content');
+        if (!sourceContent) {
+            return null;
+        }
+
+        const identifier = element.getAttribute && (
+            element.getAttribute('xml:id') ||
+            element.getAttribute('data-ptx-xml-id') ||
+            element.getAttribute('id')
+        );
+        if (!identifier) {
+            return null;
+        }
+
+        const text = sourceContent.value;
+        const idIndex = text.indexOf(`xml:id="${identifier}"`);
+        if (idIndex === -1) {
+            return null;
+        }
+
+        const start = text.lastIndexOf('<', idIndex);
+        if (start === -1) {
+            return null;
+        }
+
+        return { path: null, start, end: start };
+    }
+
+    syncSelectionFromVisual(element) {
+        if (this.isSyncingSelection) {
+            return;
+        }
+
+        const sourceContent = document.getElementById('source-content');
+        if (!sourceContent) {
+            return;
+        }
+
+        const targetElement = element ? this.findElementWithPath(element) : this.getVisualSelectionElement();
+        if (!targetElement) {
+            return;
+        }
+
+        let current = targetElement;
+        let location = null;
+
+        while (current && !location) {
+            const path = current.dataset ? current.dataset.ptxPath : null;
+            if (path) {
+                location = this.getSourceLocationForPath(path);
+            }
+
+            if (!location) {
+                location = this.findLocationById(current);
+            }
+
+            if (!location) {
+                current = this.findElementWithPath(current.parentElement);
+            }
+        }
+
+        if (!location) {
+            return;
+        }
+
+        this.isSyncingSelection = true;
+        try {
+            this.scrollSourceToIndex(sourceContent, location.start);
+            this.updateCursorPosition();
+        } finally {
+            this.isSyncingSelection = false;
+        }
+    }
+
+    syncSourceSelectionToVisual() {
+        if (this.isSyncingSelection) {
+            return;
+        }
+
+        const sourceContent = document.getElementById('source-content');
+        const visualContent = document.getElementById('visual-content');
+        if (!sourceContent || !visualContent) {
+            return;
+        }
+
+        const offset = sourceContent.selectionStart;
+        const path = this.getSourcePathAtOffset(offset);
+        if (!path) {
+            return;
+        }
+
+        const element = this.findVisualElementByPath(path);
+        if (!element) {
+            return;
+        }
+
+        this.isSyncingSelection = true;
+        try {
+            this.selectElement(element);
+            if (this.currentView !== 'source') {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        } finally {
+            this.isSyncingSelection = false;
+        }
+    }
+
     onVisualEdit() {
         if (this.isApplyingHistory) {
             return;
@@ -503,11 +928,13 @@ class PreTeXtCanvas {
             return;
         }
 
+        this.invalidateSourceLocationMap();
         this.markDocumentModified();
         this.syncToVisual();
         this.generateOutline();
         this.validateDocument();
         this.scheduleHistorySnapshot();
+        this.syncSourceSelectionToVisual();
     }
 
     syncToSource() {
@@ -522,6 +949,8 @@ class PreTeXtCanvas {
         let xml = visualContent.innerHTML;
         xml = this.htmlToXml(xml);
         sourceContent.value = xml;
+        this.invalidateSourceLocationMap();
+        this.syncSelectionFromVisual(this.selectedElement);
     }
 
     syncToVisual() {
@@ -535,8 +964,20 @@ class PreTeXtCanvas {
         try {
             const xml = sourceContent.value;
             const html = this.xmlToHtml(xml);
+            const previousPath = this.selectedElement && this.selectedElement.dataset
+                ? this.selectedElement.dataset.ptxPath
+                : null;
             visualContent.innerHTML = html;
             this.renderMath();
+
+            if (previousPath) {
+                const restored = this.findVisualElementByPath(previousPath);
+                if (restored) {
+                    this.selectElement(restored);
+                }
+            }
+
+            this.syncSourceSelectionToVisual();
         } catch (e) {
             console.warn('Could not sync to visual editor:', e);
         }
@@ -588,6 +1029,14 @@ class PreTeXtCanvas {
             }
 
             mathEl.replaceWith(replacement);
+        });
+
+        container.querySelectorAll('[data-ptx-path]').forEach((el) => {
+            el.removeAttribute('data-ptx-path');
+        });
+
+        container.querySelectorAll('[data-ptx-xml-id]').forEach((el) => {
+            el.removeAttribute('data-ptx-xml-id');
         });
 
         return container.innerHTML;
@@ -761,13 +1210,16 @@ class PreTeXtCanvas {
         if (!elementId || elementId === 'error') return;
         
         if (this.currentView === 'visual' || this.currentView === 'split') {
-            const element = document.querySelector(`[id="${elementId}"]`);
+            const escapedId = this.escapeForAttributeSelector(elementId);
+            const element = document.querySelector(`[id="${escapedId}"]`) ||
+                document.querySelector(`[data-ptx-xml-id="${escapedId}"]`);
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 this.selectElement(element);
+                this.syncSelectionFromVisual(element);
             }
         }
-        
+
         if (this.currentView === 'source' || this.currentView === 'split') {
             const sourceContent = document.getElementById('source-content');
             const text = sourceContent.value;
@@ -778,6 +1230,7 @@ class PreTeXtCanvas {
                 sourceContent.focus();
                 sourceContent.setSelectionRange(match, match);
                 sourceContent.scrollTop = sourceContent.scrollHeight * (match / text.length);
+                this.syncSourceSelectionToVisual();
             }
         }
     }
@@ -813,6 +1266,7 @@ class PreTeXtCanvas {
         sourceContent.scrollTop = sourceContent.scrollHeight * ratio;
 
         this.updateCursorPosition();
+        this.syncSourceSelectionToVisual();
     }
 
     validateDocument() {
@@ -887,7 +1341,7 @@ class PreTeXtCanvas {
                 return;
             }
         }
-        
+
         const defaultDocument = `<?xml version="1.0" encoding="UTF-8"?>
 <pretext xmlns:xi="http://www.w3.org/2001/XInclude" xml:lang="en-US">
     <docinfo>
@@ -914,9 +1368,21 @@ class PreTeXtCanvas {
     </book>
 </pretext>`;
 
-        document.getElementById('source-content').value = defaultDocument;
-        document.getElementById('visual-content').innerHTML = '<div class="pretext-document"><h1>New PreTeXt Document</h1><p>Start writing your content here.</p></div>';
-        
+        const sourceContent = document.getElementById('source-content');
+        const visualContent = document.getElementById('visual-content');
+
+        if (sourceContent) {
+            sourceContent.value = defaultDocument;
+        }
+
+        if (visualContent) {
+            visualContent.innerHTML = this.xmlToHtml(defaultDocument);
+        }
+
+        this.invalidateSourceLocationMap();
+        this.renderMath();
+        this.syncSourceSelectionToVisual();
+
         this.isDocumentModified = false;
         this.generateOutline();
         this.validateDocument();
@@ -936,15 +1402,17 @@ class PreTeXtCanvas {
         reader.onload = (e) => {
             const content = e.target.result;
             document.getElementById('source-content').value = content;
-            
+            this.invalidateSourceLocationMap();
+
             // Convert to visual representation
             const html = this.xmlToHtml(content);
             document.getElementById('visual-content').innerHTML = html;
-            
+
             this.isDocumentModified = false;
             this.generateOutline();
             this.validateDocument();
             this.renderMath();
+            this.syncSourceSelectionToVisual();
             this.updateStatus(`Loaded: ${file.name}`);
             this.recordHistorySnapshot(true);
         };
@@ -1184,6 +1652,7 @@ class PreTeXtCanvas {
 
         if (sourceContent) {
             sourceContent.value = snapshot.source;
+            this.invalidateSourceLocationMap();
         }
 
         if (visualContent) {
@@ -1196,6 +1665,7 @@ class PreTeXtCanvas {
         this.generateOutline();
         this.validateDocument();
         this.renderMath();
+        this.syncSourceSelectionToVisual();
 
         this.isApplyingHistory = false;
     }
