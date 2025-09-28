@@ -722,18 +722,20 @@ class PreTeXtCanvas {
         return best ? best.path : null;
     }
 
-    scrollSourceToIndex(sourceContent, index) {
+    scrollSourceToIndex(sourceContent, index, endIndex = index) {
         if (!sourceContent) {
             return;
         }
 
         const value = sourceContent.value;
-        const before = value.slice(0, index);
+        const clampedStart = Math.max(0, Math.min(index, value.length));
+        const clampedEnd = Math.max(clampedStart, Math.min(endIndex, value.length));
+        const before = value.slice(0, clampedStart);
         const beforeLines = before.split(/\r?\n/).length;
         const totalLines = value.length ? value.split(/\r?\n/).length : 1;
 
-        sourceContent.selectionStart = index;
-        sourceContent.selectionEnd = index;
+        sourceContent.selectionStart = clampedStart;
+        sourceContent.selectionEnd = clampedEnd;
 
         const denominator = Math.max(totalLines - 1, 1);
         const ratio = (beforeLines - 1) / denominator;
@@ -868,9 +870,21 @@ class PreTeXtCanvas {
             return;
         }
 
+        const documentLength = sourceContent.value.length;
+        const startIndex = Math.max(0, Math.min(location.start ?? 0, documentLength));
+        const endIndexCandidate = typeof location.end === 'number' ? location.end : location.start;
+        const endIndex = Math.max(startIndex, Math.min(endIndexCandidate ?? startIndex, documentLength));
+
         this.isSyncingSelection = true;
         try {
-            this.scrollSourceToIndex(sourceContent, location.start);
+            this.scrollSourceToIndex(sourceContent, startIndex, endIndex);
+            if (typeof sourceContent.focus === 'function') {
+                try {
+                    sourceContent.focus({ preventScroll: true });
+                } catch (focusError) {
+                    sourceContent.focus();
+                }
+            }
             this.updateCursorPosition();
         } finally {
             this.isSyncingSelection = false;
