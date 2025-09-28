@@ -487,6 +487,17 @@ body.resizing-sidebar * {
     cursor: pointer;
 }
 
+.validation-message {
+    display: block;
+}
+
+.validation-location {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #555;
+}
+
 .validation-error:hover {
     background: #fff2a8;
 }

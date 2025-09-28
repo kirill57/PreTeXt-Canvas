@@ -68,8 +68,21 @@ class PreTeXtCanvas {
 
         // Outline navigation
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('outline-item')) {
-                this.navigateToElement(e.target.dataset.elementId);
+            if (!e.target || typeof e.target.closest !== 'function') {
+                return;
+            }
+
+            const outlineItem = e.target.closest('.outline-item');
+            if (outlineItem) {
+                this.navigateToElement(outlineItem.dataset.elementId);
+                return;
+            }
+
+            const validationError = e.target.closest('.validation-error');
+            if (validationError) {
+                const lineNumber = parseInt(validationError.dataset.line, 10);
+                const columnNumber = parseInt(validationError.dataset.column, 10);
+                this.focusSourcePosition(Number.isNaN(lineNumber) ? null : lineNumber, Number.isNaN(columnNumber) ? null : columnNumber);
             }
         });
 
@@ -614,6 +627,18 @@ class PreTeXtCanvas {
         propertiesContent.innerHTML = '<p class="no-selection">Select an element to view its properties</p>';
     }
 
+    escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        };
+
+        return String(text).replace(/[&<>"']/g, (char) => map[char]);
+    }
+
     updateElementProperty(property, value) {
         if (this.selectedElement) {
             if (property === 'class') {
@@ -728,6 +753,39 @@ class PreTeXtCanvas {
         }
     }
 
+    focusSourcePosition(line, column) {
+        const sourceContent = document.getElementById('source-content');
+        if (!sourceContent) {
+            return;
+        }
+
+        const hasLine = typeof line === 'number' && !Number.isNaN(line);
+        const hasColumn = typeof column === 'number' && !Number.isNaN(column);
+        const targetLine = hasLine ? Math.max(line, 1) : 1;
+        const targetColumn = hasColumn ? Math.max(column, 1) : 1;
+
+        const lines = sourceContent.value.split(/\r?\n/);
+        let position = 0;
+
+        for (let i = 0; i < targetLine - 1 && i < lines.length; i++) {
+            position += lines[i].length + 1;
+        }
+
+        if (targetLine - 1 < lines.length) {
+            position += Math.min(targetColumn - 1, lines[targetLine - 1].length);
+        }
+
+        position = Math.min(position, sourceContent.value.length);
+
+        sourceContent.focus();
+        sourceContent.setSelectionRange(position, position);
+
+        const ratio = sourceContent.value.length > 0 ? position / sourceContent.value.length : 0;
+        sourceContent.scrollTop = sourceContent.scrollHeight * ratio;
+
+        this.updateCursorPosition();
+    }
+
     validateDocument() {
         const sourceContent = document.getElementById('source-content').value;
         const validationContent = document.getElementById('validation-content');
@@ -749,13 +807,37 @@ class PreTeXtCanvas {
                 </div>
             `;
         } catch (e) {
+            const rawMessage = e && e.message ? e.message : 'XML parsing error';
+            const sanitizedMessage = this.escapeHtml(rawMessage.replace(/\s+/g, ' ').trim());
+            const lineMatch = rawMessage.match(/line(?: number)?\s*[:=]?\s*(\d+)/i);
+            const columnMatch = rawMessage.match(/column(?: number)?\s*[:=]?\s*(\d+)/i);
+            const lineNumber = lineMatch ? parseInt(lineMatch[1], 10) : null;
+            const columnNumber = columnMatch ? parseInt(columnMatch[1], 10) : null;
+            const hasLine = lineNumber !== null && !Number.isNaN(lineNumber);
+            const hasColumn = columnNumber !== null && !Number.isNaN(columnNumber);
+            let locationLabel = '';
+
+            if (hasLine) {
+                locationLabel = `Line ${lineNumber}`;
+                if (hasColumn) {
+                    locationLabel += `, Column ${columnNumber}`;
+                }
+            }
+
+            const locationMarkup = hasLine ? `<span class="validation-location">${locationLabel}</span>` : '';
+            const dataLine = hasLine ? lineNumber : '';
+            const dataColumn = hasColumn ? columnNumber : '';
+
             validationContent.innerHTML = `
                 <div class="validation-status error">
                     <span class="status-icon">✗</span>
                     <span>XML Error</span>
                 </div>
                 <ul class="validation-errors">
-                    <li class="validation-error">${e.message}</li>
+                    <li class="validation-error" data-line="${dataLine}" data-column="${dataColumn}">
+                        <span class="validation-message">${sanitizedMessage}</span>
+                        ${locationMarkup}
+                    </li>
                 </ul>
             `;
         }
