@@ -1712,7 +1712,7 @@ class PreTeXtCanvas {
         return best ? best.path : null;
     }
 
-    scrollSourceToIndex(sourceContent, index, endIndex = index) {
+    scrollSourceToIndex(sourceContent, index, endIndex = index, options = {}) {
         if (!sourceContent) {
             return;
         }
@@ -1720,12 +1720,13 @@ class PreTeXtCanvas {
         const value = sourceContent.value;
         const clampedStart = Math.max(0, Math.min(index, value.length));
         const clampedEnd = Math.max(clampedStart, Math.min(endIndex, value.length));
+        const collapseSelection = Boolean(options.collapseSelection);
         const before = value.slice(0, clampedStart);
         const beforeLines = before.split(/\r?\n/).length;
         const totalLines = value.length ? value.split(/\r?\n/).length : 1;
 
         sourceContent.selectionStart = clampedStart;
-        sourceContent.selectionEnd = clampedEnd;
+        sourceContent.selectionEnd = collapseSelection ? clampedStart : clampedEnd;
 
         const denominator = Math.max(totalLines - 1, 1);
         const ratio = (beforeLines - 1) / denominator;
@@ -1867,7 +1868,7 @@ class PreTeXtCanvas {
 
         this.isSyncingSelection = true;
         try {
-            this.scrollSourceToIndex(sourceContent, startIndex, endIndex);
+            this.scrollSourceToIndex(sourceContent, startIndex, endIndex, { collapseSelection: true });
             if (typeof sourceContent.focus === 'function') {
                 try {
                     sourceContent.focus({ preventScroll: true });
